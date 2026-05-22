@@ -5,6 +5,16 @@ description: 标准化启动话本RP流程（新卡开局 / 老卡续玩）
 
 在当前目录下启动话本RP流程。
 
+## 重要：路径引号规则
+
+所有 bash 命令中的卡片文件夹路径**必须用双引号包裹**，因为文件夹名可能含空格和括号：
+- 正确：`python skills/import_prepare.py "角色卡/1 (2)" .`
+- 错误：`python skills/import_prepare.py 角色卡/1 (2) .`（括号会被 bash 解析为子 shell）
+
+## 重要：bash 工具不要设置 timeout
+
+长轮询 curl 命令（`--max-time 310`）会阻塞约 5 分钟。调用 bash 工具时**不要设置 timeout 参数**，让命令自然完成。
+
 ## 第一步：扫描当前目录
 
 查找素材文件（PNG角色卡、JSON世界书、TXT小说）：
@@ -18,15 +28,14 @@ description: 标准化启动话本RP流程（新卡开局 / 老卡续玩）
 
 按 CLAUDE.md「自动启动流程」步骤完整执行：
 
-0. 清理残留 Python 进程，确认端口 8765 空闲
-1. 启动桥接服务器：`python skills/start_server.py .`
-2. 写入卡片路径到 `skills/styles/.card_path`
-3. 执行导入管线：`python skills/import_prepare.py "角色卡/<卡名>" .`
-4. 读取 `skills/styles/import_context.txt` 获取汇总上下文
-5. 生成/交付开局（若 response.txt 已预填则直接交付）
-6. 执行：`python skills/handler.py "角色卡/<卡名>" --opening`
-7. 进入输入监听循环（见下方）
-8. 告知用户：「前端已就绪，打开 http://localhost:8765」
+1. 执行导入管线（自动清理残留进程+写入 card_path+state.js+response.txt）：
+   `python skills/import_prepare.py "角色卡/<卡名>" .`
+2. 启动桥接服务器：`python skills/start_server.py .`
+3. 读取 `skills/styles/import_context.txt` 获取汇总上下文
+4. 检查 `skills/styles/response.txt` — 若已预填则直接交付，否则自行生成开局写入
+5. 执行：`python skills/handler.py "角色卡/<卡名>" --opening`
+6. 进入输入监听循环（见下方）
+7. 告知用户：「前端已就绪，打开 http://localhost:8765」
 
 ### 情况 B — 有 chat_log.json + memory/（老卡续玩）
 
@@ -43,7 +52,8 @@ description: 标准化启动话本RP流程（新卡开局 / 老卡续玩）
 
 ## 输入监听循环
 
-Pi 中使用 bash 长轮询替代 Claude Code 的 ScheduleWakeup：
+Pi 中使用 bash 长轮询替代 Claude Code 的 ScheduleWakeup。
+**调用 bash 工具时不要设置 timeout 参数**，curl 的 `--max-time 310` 会自行控制超时：
 
 ```bash
 while true; do

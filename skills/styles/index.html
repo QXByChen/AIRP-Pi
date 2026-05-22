@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Claude Code RP</title>
+<title>AIRP-Pi RP</title>
 <script src="lib/jquery-3.5.1.min.js"></script>
 <script src="lib/lodash-4.17.21.min.js"></script>
 <link rel="stylesheet" href="lib/toastr-2.1.4.min.css">
@@ -916,7 +916,7 @@ body {
   </div>
 </div>
 
-<div id="toast">✓ 已复制到剪贴板，请粘贴到 Claude Code</div>
+<div id="toast">✓ 已复制到剪贴板</div>
 
 <!-- Portrait zoom modal -->
 <div id="beautify-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:9999;justify-content:center;align-items:center;cursor:zoom-out;" onclick="this.style.display='none'">
@@ -1158,7 +1158,21 @@ function render() {
   // because initApp() mutates the DOM (flip-card backs, etc.), which
   // would destroy card state and re-run scripts unnecessarily.
   const contentEl = document.getElementById('doc');
-  let newContent = window.CONTENT_HTML || '<div style="padding:60px;text-align:center;color:var(--muted);">等待生成内容...</div>';
+  let newContent = window.CONTENT_HTML || '';
+  if (!newContent) {
+    // Show card info or waiting state
+    let placeholder = '<div style="padding:60px;text-align:center;color:var(--muted);">';
+    if (window.STATE && window.STATE.world) {
+      placeholder += '<p style="font-size:1.2em;margin-bottom:12px;">📖 ' + (window.STATE.world || '') + '</p>';
+      placeholder += '<p>角色卡已就绪，等待 Pi Agent 生成开局...</p>';
+      placeholder += '<p style="font-size:0.8em;margin-top:8px;opacity:0.7;">如长时间无响应，请检查终端窗口中 Pi 的运行状态</p>';
+    } else {
+      placeholder += '<p style="font-size:1.1em;margin-bottom:12px;">拖入角色卡 PNG 开始</p>';
+      placeholder += '<p style="font-size:0.85em;opacity:0.7;">或将角色卡文件夹放入 角色卡/ 目录</p>';
+    }
+    placeholder += '</div>';
+    newContent = placeholder;
+  }
   newContent = replaceUser(newContent);
   // Apply card author's regex scripts via SillyTavern-compatible engine.
   // Uses getRegexedString() from _regex_engine.js with proper placement
@@ -1490,7 +1504,7 @@ async function doSubmit() {
     if (data.ok) {
       document.getElementById('user-input').value = '';
       const toast = document.getElementById('toast');
-      toast.textContent = '✓ 已发送，等待 Claude Code 回应...';
+      toast.textContent = '✓ 已发送，等待 ' + (window._modelName || 'AI') + ' 回应...';
       toast.style.background = 'var(--accent2)';
       toast.classList.add('show');
       document.getElementById('last-action').textContent = '上次提交: ' + new Date().toLocaleTimeString();
@@ -1998,6 +2012,11 @@ loadOpenings();
 pollTimer = setInterval(reloadData, 3000);
 setInterval(checkBridge, 5000);
 setInterval(loadStyleProfiles, 15000);
+
+// Fetch model name for display
+fetch('/api/config').then(r => r.json()).then(d => {
+  if (d.ok && d.config) window._modelName = d.config.model || d.config.provider || 'AI';
+}).catch(() => {});
 
 // ═══ Dark Mode Toggle ═══
 (function() {

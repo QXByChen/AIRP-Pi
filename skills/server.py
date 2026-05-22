@@ -389,15 +389,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 dest = card_dir / filename
                 dest.write_bytes(file_item.file.read())
                 # 运行 import_card 解析
+                import_result = {}
                 try:
                     from import_card import run_import
-                    run_import(str(card_dir))
+                    import_result = run_import(str(card_dir), str(PROJECT_ROOT)) or {}
                 except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                     print(f"[server] import_card 解析警告: {e}")
                 # 设为当前卡
                 card_store.set_current_card_name(card_name)
                 CARD_PATH_FILE.write_text(str(card_dir.resolve()), encoding="utf-8")
-                self._json({"ok": True, "card_id": card_name, "path": str(card_dir)})
+                # 更新 state.js 让前端显示卡片信息
+                world_name = import_result.get("world_name", card_name)
+                state_obj = {"world": world_name, "stage": "", "time": "", "location": "", "generatedCount": 0}
+                state_content = "var STATE = " + json.dumps(state_obj, ensure_ascii=False) + ";\n"
+                (ROOT / "state.js").write_text(state_content, encoding="utf-8")
+                self._json({"ok": True, "card_id": card_name, "path": str(card_dir), "world": world_name})
             except Exception as e:
                 import traceback
                 traceback.print_exc()

@@ -516,6 +516,14 @@ def write_content_js(card_folder):
         if tokens:
             turn_tokens[str(turn_idx)] = tokens
 
+        # Build turn HTML
+        wrap = '<div class="turn-wrap">'
+        if user_raw:
+            wrap += '<div class="turn-user"><div class="turn-role">你</div><div class="turn-text">' + user_raw + '</div></div>'
+        wrap += '<div class="turn-ai"><div class="turn-role">叙事</div><div class="turn-text">' + ai_display + '</div></div>'
+        wrap += '</div>'
+        html_parts.append(wrap)
+
     # Extract startup cost from turn 0 token data (persistent across rounds)
     startup_cost = {}
     if log and log[0].get("tokens"):
@@ -530,13 +538,6 @@ def write_content_js(card_folder):
                 "total": st_total,
                 "cache_hit": t0.get("cache_hit", 0),
             }
-
-        wrap = '<div class="turn-wrap">'
-        if user_raw:
-            wrap += '<div class="turn-user"><div class="turn-role">你</div><div class="turn-text">' + user_raw + '</div></div>'
-        wrap += '<div class="turn-ai"><div class="turn-role">叙事</div><div class="turn-text">' + ai_display + '</div></div>'
-        wrap += '</div>'
-        html_parts.append(wrap)
 
     content_html = "".join(html_parts)
 

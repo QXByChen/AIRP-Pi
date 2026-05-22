@@ -135,7 +135,7 @@ def find_pi_binary() -> str:
 
 
 def launch_pi(config: dict):
-    """启动 Pi Agent 并自动发送 /rp。"""
+    """启动 Pi Agent，传入 /rp 作为初始消息进入 RP 技能循环。"""
     pi_bin = find_pi_binary()
     if not pi_bin:
         print("[launcher] 错误：找不到 Pi Agent。请运行 npm install")
@@ -146,7 +146,6 @@ def launch_pi(config: dict):
     api_key = config.get("api_key", "")
 
     env = os.environ.copy()
-    # 根据 provider 设置对应的环境变量
     key_env_map = {
         "deepseek": "DEEPSEEK_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
@@ -155,28 +154,19 @@ def launch_pi(config: dict):
     env_var = key_env_map.get(provider, f"{provider.upper()}_API_KEY")
     env[env_var] = api_key
 
-    cmd = [pi_bin, "--provider", provider, "--model", model]
+    # Pass /rp as a positional argument so Pi enters interactive mode
+    # and immediately executes the RP skill. Do NOT pipe stdin — Pi must
+    # detect a TTY to stay in interactive mode (piped stdin → print mode → exit).
+    cmd = [pi_bin, "--provider", provider, "--model", model, "/rp"]
     print(f"[launcher] 启动 Pi: {provider}/{model}")
     print(f"[launcher] 前端地址: http://localhost:{SERVER_PORT}")
     print()
 
     proc = subprocess.Popen(
         cmd,
-        stdin=subprocess.PIPE,
         env=env,
         cwd=str(ROOT),
     )
-
-    # 等待 Pi 初始化后自动发送 /rp
-    time.sleep(2)
-    try:
-        proc.stdin.write(b"/rp\n")
-        proc.stdin.flush()
-        # 关闭 stdin 写入端，让 Pi 继续运行但不再接收终端输入
-        # （所有用户输入通过浏览器 → server → input.txt）
-        proc.stdin.close()
-    except Exception as e:
-        print(f"[launcher] 发送 /rp 失败: {e}")
 
     try:
         proc.wait()
