@@ -43,6 +43,12 @@ DEFAULT_SETTINGS = {
 
 os.chdir(str(ROOT))
 
+# Ensure placeholder files exist so frontend doesn't error on first load
+if not (ROOT / "state.js").exists():
+    (ROOT / "state.js").write_text("var STATE = null;\n", encoding="utf-8")
+if not (ROOT / "content.js").exists():
+    (ROOT / "content.js").write_text('var CONTENT_HTML = "";\nvar CONTENT_SUMMARY = "";\nvar CONTENT_OPTIONS = [];\n', encoding="utf-8")
+
 
 def load_config():
     """Read config.json, return dict or None."""

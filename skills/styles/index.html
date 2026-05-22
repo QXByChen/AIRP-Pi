@@ -952,18 +952,17 @@ function reloadData() {
     c.id = '_content_js';
     c.src = 'content.js?v=' + ts;
     c.onload = () => { _consecutiveFailures = 0; if (window.CONTENT_HTML !== undefined) lastContentMtime = ts; render(); };
-    c.onerror = () => { _consecutiveFailures++; if (_consecutiveFailures >= 3) showError('内容加载失败，请刷新页面'); render(); };
+    c.onerror = () => { render(); };
     document.head.appendChild(c);
   };
   s.onerror = () => {
-    _consecutiveFailures++;
     const oldContent = document.getElementById('_content_js');
     if (oldContent) oldContent.remove();
     const c = document.createElement('script');
     c.id = '_content_js';
     c.src = 'content.js?v=' + ts;
     c.onload = () => { _consecutiveFailures = 0; if (window.CONTENT_HTML !== undefined) lastContentMtime = ts; render(); };
-    c.onerror = () => { _consecutiveFailures++; if (_consecutiveFailures >= 3) showError('内容加载失败，请刷新页面'); render(); };
+    c.onerror = () => { render(); };
     document.head.appendChild(c);
   };
   document.head.appendChild(s);
