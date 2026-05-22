@@ -44,6 +44,48 @@ def count_chinese(text):
     return count
 
 
+# ── Banned Pattern Detection (程序化反八股门禁) ──
+
+BANNED_PATTERNS = [
+    (r'——', '破折号'),
+    (r'不是[^。！？\n]{2,20}而是', '先否后肯句式'),
+    (r'[^。，！？\n]{1,5}……不[，,]是', '自我纠正式转折'),
+    (r'(?:就像|如同|仿佛)[^。]{2,15}(?:小兽|幼兽|猎物|小猫|野兽|母兽|小动物)', '动物比喻'),
+    (r'几不可[见闻察查]', '虚假精确'),
+    (r'指节泛白', '八股微表情'),
+    (r'瞳孔微[缩张]', '八股微表情'),
+    (r'喉结滚动', '八股微表情'),
+    (r'睫毛颤动', '八股微表情'),
+    (r'(?:不自觉|下意识|不由自主)地', '全知修饰词'),
+    (r'情不自禁', '全知修饰词'),
+    (r'鬼使神差', '全知修饰词'),
+    (r'四肢百骸', '身体八股'),
+    (r'神经末梢', '身体八股'),
+    (r'(?:脊椎|脊柱|尾椎|尾骨)', '身体八股'),
+    (r'像在陈述一个事实', '套话句式'),
+    (r'最后一根稻草', '网文套话'),
+    (r'不容(?:置疑|拒绝|抗拒|质疑|错辨)', '网文套话'),
+    (r'细若蚊[呐蚋]', '虚假精确'),
+    (r'难以言喻', '虚假精确'),
+    (r'(?:战栗|颤栗)', '动作套话'),
+    (r'铺天盖地', '动作套话'),
+    (r'狂风暴雨般', '动作套话'),
+    (r'(?:涟漪|心湖|深潭)', '水面意象滥用'),
+    (r'(?:餍足|旖旎|氤氲)', '情感标签滥用'),
+]
+
+
+def check_banned_patterns(content_text):
+    """Check content against banned patterns. Returns list of (matched_text, category)."""
+    clean = re.sub(r"<[^>]+>", "", content_text)
+    violations = []
+    for pattern, category in BANNED_PATTERNS:
+        matches = re.findall(pattern, clean)
+        if matches:
+            violations.append((matches[0] if isinstance(matches[0], str) else matches[0], category))
+    return violations
+
+
 def main():
     if len(sys.argv) < 3:
         print(json.dumps({"ok": False, "error": "Usage: round_deliver.py <card_folder> <ROOT>"}))
@@ -124,6 +166,26 @@ def main():
             "hint": f"当前 {chinese_count} 字，目标 {word_count_target} 字（最低 {threshold} 字）。请扩充感官细节、NPC 微反应、环境变化。禁止灌水重复。"
         }, ensure_ascii=False))
         sys.exit(0)
+
+    # ── 3b. Banned Pattern Check (反八股门禁) ──
+    violations = check_banned_patterns(content_text)
+    if violations:
+        # Check retry count from environment (Pi Agent tracks this)
+        retry_count = int(os.environ.get("ROUND_RETRY_COUNT", "0"))
+        if retry_count >= 2:
+            # 3rd attempt still has violations — let it pass but log
+            violation_log = "; ".join(f"{v[0]}({v[1]})" for v in violations[:5])
+            sys.stderr.write(f"[WARN] 禁用词放行(retry上限): {violation_log}\n")
+        else:
+            violation_list = "; ".join(f"「{v[0]}」({v[1]})" for v in violations[:3])
+            print(json.dumps({
+                "action": "retry",
+                "word_count": {"current": chinese_count, "target": word_count_target, "ratio": round(ratio, 2)},
+                "tokens": token_data,
+                "banned_violations": [{"text": v[0], "category": v[1]} for v in violations],
+                "hint": f"禁用词/句式命中: {violation_list}。请替换这些表达后重新生成。参考 constraints.md 替换规则。"
+            }, ensure_ascii=False))
+            sys.exit(0)
 
     # Append token block to response.txt BEFORE handler reads it.
     # Always append (even with delta=0) so cumulative/startup stats are visible.

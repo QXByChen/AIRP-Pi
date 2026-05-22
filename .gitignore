@@ -18,3 +18,6 @@ package-lock.json
 .initvar
 current-card.txt
 角色卡/
+nul
+pi_stdout.txt
+pi_stderr.txt

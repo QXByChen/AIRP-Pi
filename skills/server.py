@@ -341,9 +341,60 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     self._json({"ok": False, "error": "missing card"}, 400)
                     return
                 card_store.set_current_card_name(card_id)
-                CARD_PATH_FILE.write_text(str(card_store.get_card_dir(card_id).resolve()), encoding="utf-8")
+                card_dir = card_store.get_card_dir(card_id)
+                CARD_PATH_FILE.write_text(str(card_dir.resolve()), encoding="utf-8")
                 payload = card_store.get_card_payload(card_id)
-                self._json({"ok": True, "current": card_id, "card": {"id": payload["id"], "fields": payload["fields"]}})
+                # Rebuild content.js from target card's chat_log
+                chat_log = card_store._read_json(card_dir / "chat_log.json", [])
+                if chat_log:
+                    try:
+                        from handler import build_content_from_log
+                        build_content_from_log(str(card_dir), chat_log)
+                    except Exception:
+                        pass
+                else:
+                    placeholder = 'var CONTENT_HTML = "<div class=\\"placeholder\\">角色卡已就绪，等待 Pi Agent 生成开局...</div>";\nvar CONTENT_OPTIONS = "";\nvar CONTENT_IMG_MAP = {};\n'
+                    (ROOT / "content.js").write_text(placeholder, encoding="utf-8")
+                # Rebuild state.js from card data
+                card_data = card_store._read_json(card_dir / ".card_data.json", {})
+                world_name = card_data.get("world_name") or card_data.get("name") or card_id
+                state_obj = {"world": world_name, "stage": "", "time": "", "location": "", "generatedCount": len(chat_log) // 2}
+                state_content = "var STATE = " + json.dumps(state_obj, ensure_ascii=False) + ";\n"
+                (ROOT / "state.js").write_text(state_content, encoding="utf-8")
+                self._json({"ok": True, "current": card_id, "card": {"id": payload["id"], "fields": payload["fields"]}, "cards": card_store.list_cards()})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/card/update":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                card_id = str(data.get("id") or data.get("card") or "").strip()
+                fields = data.get("fields", {})
+                if not card_id:
+                    card_id = card_store.get_current_card_name()
+                if not fields:
+                    self._json({"ok": False, "error": "missing fields"}, 400)
+                    return
+                payload = card_store.save_card_fields(card_id, fields)
+                self._json({"ok": True, "card": {"id": payload["id"], "fields": payload["fields"]}})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/card/delete":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                card_id = str(data.get("card") or "").strip()
+                if not card_id:
+                    self._json({"ok": False, "error": "missing card"}, 400)
+                    return
+                new_active = card_store.delete_card(card_id)
+                if new_active:
+                    CARD_PATH_FILE.write_text(str(card_store.get_card_dir(new_active).resolve()), encoding="utf-8")
+                self._json({"ok": True, "current": new_active, "cards": card_store.list_cards()})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, 500)
 
@@ -564,7 +615,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == "/api/card":
             try:
                 payload = card_store.get_card_payload()
-                self._json({"ok": True, "card": {"id": payload["id"], "format": payload["format"], "fields": payload["fields"]}})
+                self._json({"ok": True, "card": {"id": payload["id"], "fields": payload["fields"]}})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, 500)
             return

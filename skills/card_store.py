@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,26 @@ def _write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def atomic_json(path, data):
+    """Write JSON atomically via tmp+rename to prevent corruption."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def ensure_card_runtime(card_id: str) -> dict:
+    """Ensure card has all runtime files. Runs import if .card_data.json missing."""
+    card_dir = get_card_dir(card_id)
+    card_data_path = card_dir / ".card_data.json"
+    if card_data_path.exists():
+        return _read_json(card_data_path, {})
+    from import_card import run_import
+    result = run_import(str(card_dir), str(PROJECT_ROOT))
+    return result if isinstance(result, dict) else {}
 
 
 def _mtime_iso(path) -> str:
@@ -69,6 +90,7 @@ def set_current_card_name(card_id: str) -> None:
     card_dir = get_card_dir(card_id)
     if not card_dir.exists():
         raise FileNotFoundError(f"角色卡不存在: {card_id}")
+    ensure_card_runtime(card_id)
     CURRENT_CARD_FILE.write_text(card_id, encoding="utf-8")
 
 
@@ -112,6 +134,7 @@ def get_card_payload(card_id: str | None = None) -> dict:
             "personality": card_data.get("personality", ""),
             "scenario": card_data.get("scenario", ""),
             "first_mes": card_data.get("first_mes", ""),
+            "tags": card_data.get("tags", []),
         },
     }
 
@@ -145,3 +168,64 @@ def get_openings(card_id: str | None = None) -> list[dict]:
     styles_dir = SKILLS_DIR / "styles"
     data = _read_json(styles_dir / "openings.json", [])
     return data if isinstance(data, list) else []
+
+
+def save_card_fields(card_id: str, fields: dict) -> dict:
+    """Update card fields in .card_data.json atomically, rebuild openings."""
+    card_dir = get_card_dir(card_id)
+    card_data_path = card_dir / ".card_data.json"
+    raw = _read_json(card_data_path, {})
+
+    for key in ("name", "description", "personality", "scenario", "first_mes",
+                "creator_notes", "system_prompt", "tags"):
+        if key in fields:
+            value = fields[key]
+            if key == "tags" and isinstance(value, str):
+                value = [x.strip() for x in value.split(",") if x.strip()]
+            raw[key] = value
+
+    atomic_json(card_data_path, raw)
+
+    openings = _build_openings(raw)
+    if openings:
+        atomic_json(SKILLS_DIR / "styles" / "openings.json", openings)
+
+    return get_card_payload(card_id)
+
+
+def delete_card(card_id: str) -> str:
+    """Soft-delete card by moving to .trash/. Returns new active card or ''."""
+    card_dir = get_card_dir(card_id)
+    if not card_dir.exists():
+        raise FileNotFoundError(f"角色卡不存在: {card_id}")
+
+    trash_dir = CARDS_DIR / ".trash"
+    trash_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = trash_dir / f"{card_id}_{ts}"
+    shutil.move(str(card_dir), str(dest))
+
+    current = get_current_card_name()
+    if current == card_id:
+        cards = list_available_card_ids()
+        new_active = cards[0] if cards else ""
+        if new_active:
+            CURRENT_CARD_FILE.write_text(new_active, encoding="utf-8")
+        else:
+            CURRENT_CARD_FILE.write_text("", encoding="utf-8")
+        return new_active
+    return get_current_card_name()
+
+
+def _build_openings(card_data: dict) -> list[dict]:
+    """Build openings list from card data (first_mes + alternate_greetings)."""
+    openings = []
+    first = card_data.get("first_mes") or ""
+    if first.strip():
+        label = first.strip()[:30] + ("..." if len(first.strip()) > 30 else "")
+        openings.append({"id": 0, "label": label, "content": first, "source": "first_mes"})
+    for idx, text in enumerate(card_data.get("alternate_greetings") or [], start=1):
+        if str(text).strip():
+            label = str(text).strip()[:30] + ("..." if len(str(text).strip()) > 30 else "")
+            openings.append({"id": idx, "label": label, "content": str(text), "source": "alternate_greetings"})
+    return openings

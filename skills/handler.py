@@ -1210,6 +1210,11 @@ def _extract_options(ai_text):
     return m.group(1).strip() if m else ""
 
 
+def build_content_from_log(card_folder, chat_log=None):
+    """Rebuild content.js for a card. Used by /api/play when switching cards."""
+    write_content_js(card_folder)
+
+
 # ═══ CLI ═══
 
 if __name__ == "__main__":

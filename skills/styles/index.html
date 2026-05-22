@@ -808,6 +808,8 @@ body {
   <span class="dim" id="tb-time">—</span>
   <span class="sep">|</span>
   <span class="dim" id="tb-location">—</span>
+  <span class="sep">|</span>
+  <select id="card-select" onchange="switchCard(this.value)" title="切换角色卡" style="background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:0.75em;font-family:var(--font-ui);max-width:140px;cursor:pointer;"></select>
   <span class="spacer"></span>
   <span class="dim" style="font-size:0.75em;" id="conn-label">桥接:</span>
   <span id="conn-dot" class="dot red" title="服务器未连接"></span>
@@ -889,6 +891,18 @@ body {
       <h4>🎬 开场白</h4>
       <select id="set-opening" onchange="doSwitchOpening()" style="width:100%;padding:4px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);font-size:0.78em;font-family:var(--font-ui);">
       </select>
+    </div>
+    <div class="side-card" id="card-edit-card">
+      <h4>🎭 角色卡编辑</h4>
+      <div class="setting-row"><span class="label">名称</span><input id="ce-name" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);"></div>
+      <div class="setting-row"><span class="label">标签</span><input id="ce-tags" placeholder="逗号分隔" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);"></div>
+      <div class="setting-row"><span class="label">描述</span><textarea id="ce-description" rows="3" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+      <div class="setting-row"><span class="label">性格</span><textarea id="ce-personality" rows="2" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+      <div class="setting-row"><span class="label">场景</span><textarea id="ce-scenario" rows="2" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button onclick="saveCardFields()" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:0.75em;cursor:pointer;">保存修改</button>
+        <button onclick="deleteCurrentCard()" style="padding:4px 8px;border-radius:4px;border:1px solid #c0392b;background:transparent;color:#c0392b;font-size:0.75em;cursor:pointer;">删除</button>
+      </div>
     </div>
     <div class="side-card">
       <h4>📋 剧情摘要</h4>
@@ -2004,11 +2018,100 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ═══ Card Management ═══
+var _currentCardId = '';
+
+function loadCards() {
+  fetch('/api/cards').then(r => r.json()).then(d => {
+    if (!d.ok) return;
+    var sel = document.getElementById('card-select');
+    var prev = sel.value;
+    sel.innerHTML = '';
+    (d.cards || []).forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = (c.name || c.id) + (c.messages ? ' (' + c.messages + '轮)' : '');
+      if (c.active) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    _currentCardId = d.current || sel.value;
+    loadCardFields();
+  }).catch(function() {});
+}
+
+function switchCard(cardId) {
+  if (!cardId || cardId === _currentCardId) return;
+  toastr.info('切换中...');
+  fetch('/api/play', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({card: cardId})})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        _currentCardId = d.current || cardId;
+        toastr.success('已切换: ' + (d.card && d.card.fields && d.card.fields.name || cardId));
+        reloadData();
+        loadCards();
+      } else {
+        toastr.error('切换失败: ' + (d.error || ''));
+      }
+    }).catch(e => toastr.error('切换请求失败'));
+}
+
+function loadCardFields() {
+  fetch('/api/card').then(r => r.json()).then(d => {
+    if (!d.ok || !d.card) return;
+    var f = d.card.fields || {};
+    document.getElementById('ce-name').value = f.name || '';
+    document.getElementById('ce-tags').value = Array.isArray(f.tags) ? f.tags.join(', ') : (f.tags || '');
+    document.getElementById('ce-description').value = f.description || '';
+    document.getElementById('ce-personality').value = f.personality || '';
+    document.getElementById('ce-scenario').value = f.scenario || '';
+  }).catch(function() {});
+}
+
+function saveCardFields() {
+  var fields = {
+    name: document.getElementById('ce-name').value,
+    tags: document.getElementById('ce-tags').value,
+    description: document.getElementById('ce-description').value,
+    personality: document.getElementById('ce-personality').value,
+    scenario: document.getElementById('ce-scenario').value
+  };
+  fetch('/api/card/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: _currentCardId, fields: fields})})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        toastr.success('卡片已保存');
+        loadCards();
+      } else {
+        toastr.error('保存失败: ' + (d.error || ''));
+      }
+    }).catch(e => toastr.error('保存请求失败'));
+}
+
+function deleteCurrentCard() {
+  if (!_currentCardId) return;
+  if (!confirm('确定删除角色卡「' + _currentCardId + '」？\n（将移至回收站，可手动恢复）')) return;
+  fetch('/api/card/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({card: _currentCardId})})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        toastr.success('已删除');
+        _currentCardId = d.current || '';
+        loadCards();
+        loadCardFields();
+        reloadData();
+      } else {
+        toastr.error('删除失败: ' + (d.error || ''));
+      }
+    }).catch(e => toastr.error('删除请求失败'));
+}
+
 // No page flash: use dynamic script reloading instead of meta refresh
 reloadData();
 checkBridge();
 loadSettings();
 loadOpenings();
+loadCards();
 pollTimer = setInterval(reloadData, 3000);
 setInterval(checkBridge, 5000);
 setInterval(loadStyleProfiles, 15000);
@@ -2083,7 +2186,10 @@ fetch('/api/config').then(r => r.json()).then(d => {
       .then(function(d) {
         if (d.ok) {
           toastr.success('角色卡已导入: ' + d.card_id);
-          setTimeout(function() { location.reload(); }, 1500);
+          _currentCardId = d.card_id;
+          loadCards();
+          loadCardFields();
+          reloadData();
         } else {
           toastr.error('导入失败: ' + (d.error || '未知错误'));
         }
