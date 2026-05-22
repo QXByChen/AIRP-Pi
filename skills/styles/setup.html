@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIRP-Pi 初始设置</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.container {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 40px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+h1 {
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: #fff;
+}
+.subtitle {
+  color: #888;
+  margin-bottom: 32px;
+  font-size: 14px;
+}
+.field {
+  margin-bottom: 20px;
+}
+label {
+  display: block;
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+input, select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0f3460;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+input:focus, select:focus {
+  border-color: #e94560;
+}
+select { cursor: pointer; }
+.btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  background: #e94560;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: background 0.2s;
+}
+.btn:hover { background: #c73e54; }
+.btn:disabled { background: #555; cursor: not-allowed; }
+.msg {
+  margin-top: 16px;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: none;
+}
+.msg.ok { display: block; background: #1b4332; color: #95d5b2; }
+.msg.err { display: block; background: #3d0000; color: #ff6b6b; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>AIRP-Pi 初始设置</h1>
+  <p class="subtitle">首次使用需要配置 API Key，保存后即可开始。</p>
+
+  <div class="field">
+    <label>API Provider</label>
+    <select id="provider">
+      <option value="deepseek">DeepSeek</option>
+      <option value="anthropic">Anthropic (Claude)</option>
+      <option value="openai">OpenAI</option>
+      <option value="openrouter">OpenRouter</option>
+      <option value="custom">自定义</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>Model</label>
+    <input type="text" id="model" value="deepseek-reasoner" placeholder="模型名称">
+  </div>
+
+  <div class="field">
+    <label>API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+  </div>
+
+  <div class="field" id="baseUrlField" style="display:none">
+    <label>Base URL（自定义 Provider 时填写）</label>
+    <input type="text" id="baseUrl" placeholder="https://api.example.com/v1">
+  </div>
+
+  <button class="btn" id="saveBtn" onclick="save()">保存并启动</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+const providerModels = {
+  deepseek: "deepseek-reasoner",
+  anthropic: "claude-sonnet-4-6-20250514",
+  openai: "gpt-4o",
+  openrouter: "deepseek/deepseek-r1",
+  custom: ""
+};
+
+document.getElementById("provider").addEventListener("change", function() {
+  const v = this.value;
+  document.getElementById("model").value = providerModels[v] || "";
+  document.getElementById("baseUrlField").style.display = v === "custom" ? "block" : "none";
+});
+
+async function save() {
+  const btn = document.getElementById("saveBtn");
+  const msg = document.getElementById("msg");
+  const apiKey = document.getElementById("apiKey").value.trim();
+  const provider = document.getElementById("provider").value;
+  const model = document.getElementById("model").value.trim();
+  const baseUrl = document.getElementById("baseUrl").value.trim();
+
+  if (!apiKey) {
+    msg.className = "msg err";
+    msg.textContent = "请输入 API Key";
+    return;
+  }
+  if (!model) {
+    msg.className = "msg err";
+    msg.textContent = "请输入模型名称";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "保存中...";
+
+  try {
+    const payload = { api_key: apiKey, provider, model, auto_open_browser: true };
+    if (baseUrl) payload.base_url = baseUrl;
+
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      msg.className = "msg ok";
+      msg.textContent = "配置已保存！launcher 将自动继续启动...";
+      btn.textContent = "已保存";
+    } else {
+      throw new Error(data.error || "保存失败");
+    }
+  } catch (e) {
+    msg.className = "msg err";
+    msg.textContent = "错误: " + e.message;
+    btn.disabled = false;
+    btn.textContent = "保存并启动";
+  }
+}
+</script>
+</body>
+</html>

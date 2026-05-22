@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code RP</title>
+<script src="lib/jquery-3.5.1.min.js"></script>
+<script src="lib/lodash-4.17.21.min.js"></script>
+<link rel="stylesheet" href="lib/toastr-2.1.4.min.css">
+<script src="lib/toastr-2.1.4.min.js"></script>
+<script src="_regex_engine.js"></script>
+<style>
+:root {
+  --bg: #f5f0e8;
+  --surface: #ede6d8;
+  --border: #d4c9b0;
+  --accent: #b06a3d;
+  --accent2: #5a7a5a;
+  --text: #3a3028;
+  --muted: #8a7a65;
+  --input-bg: #fdfaf4;
+  --font-ui: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: 'STKaiti', 'SimSun', serif;
+  --font-body: 'SimSun', '宋体', serif;
+  --ink: #3a3028;
+  --line: #d4c9b0;
+  --soft: #ede6d8;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --radius-full: 999px;
+  --color-ember: #d97706;
+}
+[data-theme="dark"] {
+  --bg: #1b1b26;
+  --surface: #24242f;
+  --border: #3a3a50;
+  --accent: #d4946a;
+  --accent2: #7aaa7a;
+  --text: #d4c5b9;
+  --muted: #9a9aac;
+  --input-bg: #1e1e2a;
+  --ink: #d4c5b9;
+  --line: #3a3a50;
+  --soft: #24242f;
+  --color-ember: #f59e0b;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c4b9a0; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #a89880; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #4a4a60; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #5a5a75; }
+html, body {
+  height: 100vh; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font-ui);
+}
+body {
+  display: flex; flex-direction: column;
+  transition: none;
+}
+
+/* ═══ TOP BAR ═══ */
+#topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 16px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 0.82em; flex-shrink: 0; min-height: 34px;
+}
+#topbar .dot { width: 7px; height: 7px; border-radius: 50%; }
+#topbar .dot.green { background: #7b9c6e; }
+#topbar .dot.yellow { background: #cc9a56; }
+#topbar .dot.red { background: #b0624a; }
+#topbar .tag {
+  background: var(--accent); color: #fff;
+  padding: 1px 10px; border-radius: 10px;
+  font-size: 0.8em; font-weight: 600; white-space: nowrap;
+}
+#topbar .sep { color: var(--border); }
+#topbar .dim { color: var(--muted); }
+#topbar .spacer { flex: 1; }
+
+/* ═══ MAIN ═══ */
+#main {
+  display: flex; flex: 1; overflow: hidden;
+}
+
+/* ═══ CONTENT ═══ */
+#content-panel {
+  flex: 1; overflow-y: auto; padding: 20px 24px;
+  display: flex; flex-direction: column; align-items: center;
+  scroll-behavior: smooth;
+  background: linear-gradient(180deg, #faf7f0 0%, #f5f0e8 100%);
+}
+[data-theme="dark"] #content-panel {
+  background: linear-gradient(180deg, #1e1e2a 0%, #1b1b26 100%);
+}
+#content-panel #doc { width: 100%; max-width: 860px; }
+#content-panel #doc > * {
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06), 0 0 1px rgba(0,0,0,.04);
+}
+
+/* ═══ TURN DISPLAY ═══ */
+.turn-wrap { margin-bottom: 22px; }
+.turn-role {
+  font-size: 0.7em; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 2.5px; margin-bottom: 5px; padding-left: 2px;
+}
+.turn-user .turn-role { color: var(--accent); }
+.turn-ai .turn-role { color: var(--accent2); }
+.turn-user .turn-text {
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px; border-radius: 0 6px 6px 0;
+  font-size: 0.88em; color: var(--muted);
+  line-height: 1.7;
+}
+.turn-ai .turn-text {
+  padding: 4px 0; line-height: 1.9;
+}
+.turn-ai .turn-text content {
+  display: block;
+}
+
+/* ═══ SIDEBAR ═══ */
+#sidebar {
+  width: 300px; flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  font-size: 0.82em;
+}
+.side-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+}
+.side-card h4 {
+  font-size: 0.82em; color: var(--accent); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+}
+.side-card .kv { display: flex; justify-content: space-between; padding: 2px 0; }
+.side-card .kv .k { color: var(--muted); }
+.stat-bar-wrap { background: var(--border); border-radius: 3px; height: 5px; margin: 2px 0 6px; }
+.stat-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+.stat-hp { background: #b0624a; }
+.stat-mp { background: #5a8a9a; }
+.stat-exp { background: #cc9a56; }
+.chip {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 0.78em; margin: 2px 3px; cursor: default;
+}
+.chip-hot { background: var(--accent); color: #fff; }
+.chip-normal { background: var(--border); color: var(--muted); }
+/* clickable action chips */
+.chip-action {
+  display: inline-block; padding: 4px 10px; border-radius: 12px;
+  font-size: 0.78em; margin: 3px 4px; cursor: pointer;
+  background: var(--input-bg); color: var(--text);
+  border: 1px solid var(--border);
+  transition: background 0.15s, border-color 0.15s;
+}
+.chip-action:hover { background: #ede6d8; border-color: var(--accent); }
+.chip-action:active { background: var(--accent); color: #fff; }
+.summary-text { color: var(--muted); font-size: 0.82em; line-height: 1.55; }
+/* settings controls */
+.setting-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+.setting-row .label { font-size: 0.8em; color: var(--muted); }
+.setting-row select {
+  background: var(--input-bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 6px; font-size: 0.78em; font-family: var(--font-ui);
+  cursor: pointer; outline: none; width: 130px;
+}
+.setting-row select:focus { border-color: var(--accent2); }
+.toggle-switch { position: relative; width: 40px; height: 20px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--border); border-radius: 20px; transition: background 0.2s;
+}
+.toggle-slider:before {
+  content: ""; position: absolute; height: 14px; width: 14px;
+  left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent2); }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+#settings-saved { font-size: 0.7em; color: var(--accent2); opacity: 0; transition: opacity 0.3s; }
+#settings-saved.show { opacity: 1; }
+
+/* ═══ INPUT ═══ */
+#input-panel {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px; flex-shrink: 0;
+}
+#input-panel .input-row { display: flex; gap: 10px; align-items: flex-end; }
+#input-panel textarea {
+  flex: 1;
+  background: var(--input-bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; font-family: var(--font-ui);
+  font-size: 0.9em; line-height: 1.5;
+  resize: none; min-height: 56px; max-height: 110px;
+  outline: none; transition: border-color 0.2s;
+}
+#input-panel textarea:focus { border-color: var(--accent2); }
+.btn-group { display: flex; gap: 6px; flex-shrink: 0; }
+#input-panel button {
+  padding: 8px 18px; border: none; border-radius: 8px;
+  font-size: 0.85em; font-weight: 600; cursor: pointer;
+  transition: background 0.15s; font-family: var(--font-ui);
+}
+.btn-submit { background: var(--accent2); color: #fff; }
+.btn-submit:hover { background: #4a6a4a; }
+.btn-secondary { background: var(--border); color: var(--text); }
+.btn-secondary:hover { background: #c4b9a0; }
+.btn-reroll {
+  font-size: 0.85em; padding: 1px 6px; border: 1px solid var(--border);
+  border-radius: 4px; background: var(--bg); cursor: pointer;
+  color: var(--muted); margin-left: 6px; vertical-align: middle;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-reroll:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-turn-del {
+  position: absolute; top: 4px; right: 8px;
+  font-size: 0.7em; padding: 2px 7px; border: 1px solid transparent;
+  border-radius: 3px; background: transparent; cursor: pointer;
+  color: var(--muted); opacity: 0; transition: opacity 0.15s, background 0.15s;
+}
+.turn-wrap:hover .btn-turn-del { opacity: 1; }
+.turn-wrap { position: relative; }
+.btn-turn-del:hover { background: #b0624a; color: #fff; border-color: #b0624a; }
+.btn-turn-del.confirming { background: #b0624a; color: #fff; opacity: 1; }
+#input-panel .meta-row {
+  display: flex; gap: 12px; align-items: center; margin-top: 6px;
+  font-size: 0.75em; color: var(--muted);
+}
+#input-panel .meta-row input {
+  background: var(--input-bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 8px; font-size: 0.9em; width: 120px;
+  font-family: var(--font-ui); outline: none;
+}
+#input-panel .meta-row input:focus { border-color: var(--accent2); }
+#toast {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+  background: var(--accent2); color: #fff;
+  padding: 8px 22px; border-radius: 20px; font-weight: 600;
+  font-size: 0.85em; opacity: 0; transition: opacity 0.3s;
+  pointer-events: none; z-index: 100;
+}
+#toast.show { opacity: 1; }
+
+/* ═══ DARK MODE OVERRIDES ═══ */
+[data-theme="dark"] .turn-ai .turn-text {
+  color: #e8dcc8;
+}
+[data-theme="dark"] .turn-user .turn-text {
+  background: #1e1e2a;
+  border-left-color: #d4946a;
+  color: #c4bcaa;
+}
+[data-theme="dark"] #topbar .tag { color: #1b1b26; }
+[data-theme="dark"] .btn-submit { color: #1b1b26; }
+[data-theme="dark"] .chip-hot { color: #1b1b26; }
+[data-theme="dark"] .toggle-slider:before { background: #d4c5b9; }
+[data-theme="dark"] input[type="range"] { accent-color: var(--accent); }
+[data-theme="dark"] #settings-saved { color: #7aaa7a; }
+[data-theme="dark"] #theme-toggle:hover { background: var(--surface); }
+[data-theme="dark"] .btn-reroll:hover { color: #1b1b26; }
+[data-theme="dark"] .btn-turn-del:hover,
+[data-theme="dark"] .btn-turn-del.confirming { color: #fff; }
+[data-theme="dark"] #toast { color: #1b1b26; }
+
+/* ═══ MVU Variable Tree ═══ */
+#sb-mvu-vars {
+  max-height: 300px; overflow-y: auto;
+  font-family: "Cascadia Code", "Consolas", "Monaco", monospace;
+  font-size: 0.78em; line-height: 1.6;
+}
+.mvu-entry { padding: 1px 0 1px 8px; }
+.mvu-key { color: var(--muted); }
+.mvu-str { color: var(--accent2); }
+.mvu-num { color: #b0624a; }
+.mvu-bool { color: #5a8a9a; font-weight: 600; }
+.mvu-null { color: var(--muted); font-style: italic; }
+.mvu-empty { color: var(--muted); font-style: italic; }
+#sb-mvu-vars details { margin-left: 4px; }
+#sb-mvu-vars summary {
+  cursor: pointer; color: var(--accent);
+  outline: none; font-size: 0.9em;
+}
+#sb-mvu-vars summary:hover { opacity: 0.8; }
+.mvu-delta {
+  animation: mvu-flash 2s ease-out;
+  border-radius: 2px;
+}
+@keyframes mvu-flash {
+  0% { background: rgba(176, 106, 61, 0.35); }
+  100% { background: transparent; }
+}
+[data-theme="dark"] @keyframes mvu-flash {
+  0% { background: rgba(212, 148, 106, 0.3); }
+  100% { background: transparent; }
+}
+
+/* ═══ BEAUTIFY DASHBOARD (card's 状态栏) ═══ */
+#sb-beautify {
+  font-family: var(--font-body);
+  font-size: 0.78em; line-height: 1.5;
+  color: var(--text);
+}
+.beautify-dashboard {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.beautify-header {
+  padding: 10px 12px 6px;
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+}
+.beautify-header-kicker {
+  font-size: 0.62rem; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--muted);
+}
+.beautify-header-title {
+  font-family: var(--font-display);
+  font-size: 1rem; font-weight: 600;
+  color: var(--text); margin: 2px 0 6px;
+}
+.beautify-meta-chips {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.beautify-meta-chip {
+  font-size: 0.68rem; color: var(--muted);
+  background: var(--ink); padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+}
+.beautify-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 1px; background: var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.beautify-tab-btn {
+  background: var(--soft); border: none;
+  color: var(--muted); padding: 6px 4px; cursor: pointer;
+  font-size: 11px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--font-body);
+  transition: background 0.15s, color 0.15s;
+}
+.beautify-tab-btn.active {
+  background: var(--surface); color: var(--text);
+  font-weight: 600; border-bottom: 2px solid var(--color-ember);
+}
+.beautify-tab-btn:hover { color: var(--text); }
+.beautify-body {
+  padding: 8px;
+}
+.beautify-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+}
+.beautify-info-card {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.beautify-info-label {
+  font-size: 0.65rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--muted);
+  margin-bottom: 3px;
+}
+.beautify-info-value {
+  font-size: 0.85rem; font-weight: 600;
+  color: var(--text);
+}
+.beautify-partner-header {
+  display: flex; gap: 6px; align-items: center;
+  flex-wrap: wrap; margin-bottom: 8px;
+}
+.beautify-partner-name {
+  font-family: var(--font-display); font-size: 0.95rem;
+  font-weight: 600; color: var(--text);
+}
+.beautify-partner-chip {
+  font-size: 0.68rem; color: var(--muted);
+  background: var(--soft); padding: 1px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+}
+.beautify-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px; margin-bottom: 8px;
+}
+.beautify-detail-item {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.beautify-detail-label {
+  font-size: 0.62rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--muted);
+}
+.beautify-detail-value {
+  font-size: 0.78rem; color: var(--text);
+  margin-top: 2px;
+}
+.beautify-jung-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 4px; margin-top: 6px;
+}
+.beautify-jung-item {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 5px 6px; text-align: center;
+}
+.beautify-jung-role {
+  font-size: 0.6rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.beautify-jung-func {
+  font-size: 0.9rem; font-weight: 700;
+  color: var(--color-ember);
+  font-family: var(--font-display);
+}
+.beautify-kink-text {
+  font-size: 0.82rem; color: var(--text);
+  line-height: 1.6; padding: 4px 0;
+}
+.beautify-empty {
+  color: var(--muted); font-style: italic;
+  padding: 8px; text-align: center;
+}
+.beautify-highlight { color: var(--color-ember); font-weight: 600; }
+.beautify-tag {
+  display: inline-block;
+  background: var(--soft); border: 1px solid var(--line);
+  padding: 1px 5px; border-radius: var(--radius-full);
+  margin: 1px 2px; font-size: 10px;
+}
+.beautify-section { margin-bottom: 2px; }
+.beautify-section-title {
+  color: var(--color-ember); font-weight: bold;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 3px; padding-bottom: 2px;
+  font-size: 13px; cursor: pointer;
+}
+.beautify-flat-panel {
+  padding: 4px 0;
+}
+.beautify-npc-tabs {
+  display: flex; gap: 1px; flex-wrap: wrap;
+}
+.beautify-npc-panel {
+  padding: 4px 0;
+}
+.beautify-npc-details { display: flex; flex-direction: column; gap: 2px; }
+.beautify-npc-details .data-row { margin: 1px 0; }
+.beautify-sub {
+  margin: 1px 0;
+}
+.beautify-sub summary {
+  cursor: pointer; font-size: 11px;
+  color: var(--muted);
+}
+.beautify-sub summary:hover { color: var(--text); }
+.data-row {
+  display: flex; align-items: baseline; gap: 4px;
+  margin: 2px 0; padding: 1px 0;
+  border-bottom: 1px dotted rgba(90, 69, 48, 0.3);
+  font-size: 12px;
+}
+.data-row .k { color: var(--muted); font-size: 11px; min-width: 60px; flex-shrink: 0; }
+
+/* ═══ INLINE VARIABLE CARDS ═══ */
+.turn-vars {
+  margin: 6px 0 2px 0;
+  display: flex; flex-wrap: wrap; gap: 5px;
+  font-family: var(--font-ui);
+}
+.tv-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  min-width: 140px;
+  flex: 1 1 auto;
+  max-width: 260px;
+}
+.tv-card.delta {
+  border-left: 3px solid var(--color-ember);
+  background: rgba(217, 119, 6, 0.04);
+}
+.tv-card-header {
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 3px;
+  font-size: 0.78em; font-weight: 600;
+  color: var(--accent);
+}
+.tv-card-header .tv-name { flex: 1; }
+.tv-portrait-thumb {
+  width: 26px; height: 26px; border-radius: 50%;
+  object-fit: cover; border: 1px solid var(--border);
+  cursor: pointer; flex-shrink: 0;
+}
+.tv-portrait-thumb:hover { border-color: var(--accent); }
+.tv-stat-row {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.68em; padding: 1px 0;
+}
+.tv-stat-label { color: var(--muted); min-width: 38px; flex-shrink: 0; }
+.tv-stat-value { color: var(--text); font-weight: 600; min-width: 20px; text-align: right; font-size: 0.9em; }
+.tv-stat-bar-bg {
+  flex: 1; height: 3px; background: var(--border);
+  border-radius: 2px; overflow: hidden;
+}
+.tv-stat-bar-fill {
+  height: 100%; border-radius: 2px;
+  transition: width 0.5s ease;
+}
+.tv-delta-item {
+  font-size: 0.68em; padding: 1px 0;
+  color: var(--text);
+}
+.tv-delta-item .old { color: var(--muted); text-decoration: line-through; margin-right: 2px; }
+.tv-delta-item .new { color: var(--color-ember); font-weight: 600; }
+.tv-card-compact {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 2px 7px;
+  font-size: 0.68em; cursor: default;
+}
+.tv-card-compact .name { color: var(--muted); }
+.tv-card-compact .val { color: var(--text); font-weight: 600; }
+
+/* ═══ PORTRAIT THUMBNAILS ═══ */
+.beautify-portrait-thumb {
+  width: 48px; height: 64px; object-fit: cover;
+  border-radius: 3px; border: 1px solid var(--border);
+  cursor: pointer; transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.beautify-portrait-thumb:hover { transform: scale(1.08); border-color: var(--accent); }
+
+/* ═══ INLINE BEAUTIFY PANEL (server-rendered, below chat, phone-theme) ═══ */
+#beautify-container {
+  position: sticky; top: 0; z-index: 5;
+  max-width: 860px; width: 100%;
+}
+.beautify-panel-inline {
+  margin: 20px 0 0 0;
+  padding: 0;
+  max-width: 860px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.beautify-panel-inline .beautify-panel-overlay {
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+[data-theme="dark"] .beautify-panel-inline .beautify-panel-overlay {
+  background: rgba(0,0,0,0.65);
+}
+.beautify-panel-inline .beautify-dashboard {
+  position: relative;
+  z-index: 1;
+}
+/* Header */
+.beautify-panel-inline .beautify-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.15);
+}
+.beautify-panel-inline .beautify-user-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background-size: cover; background-position: center;
+  border: 2px solid rgba(255,255,255,0.25);
+  flex-shrink: 0;
+}
+.beautify-panel-inline .beautify-header-text {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.beautify-panel-inline .beautify-header-title {
+  font-weight: 700; font-size: 0.95em; color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.beautify-panel-inline .beautify-header-sub {
+  font-size: 0.7em; color: rgba(255,255,255,0.65);
+}
+/* Tabs */
+.beautify-panel-inline .beautify-tabs {
+  display: flex; gap: 2px; flex-wrap: wrap;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.12);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.beautify-panel-inline .beautify-tab-btn {
+  display: flex; align-items: center; gap: 5px;
+  border: none;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.7);
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.73em;
+  transition: background 0.15s, color 0.15s;
+}
+.beautify-panel-inline .beautify-tab-btn:hover {
+  color: #fff; background: rgba(255,255,255,0.14);
+}
+.beautify-panel-inline .beautify-tab-btn.active {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  font-weight: 600;
+}
+.beautify-panel-inline .beautify-tab-avatar {
+  display: inline-block; width: 20px; height: 20px; border-radius: 50%;
+  background-size: cover; background-position: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+/* Tab content */
+.beautify-panel-inline .beautify-tab-content {
+  padding: 12px 14px;
+  color: rgba(255,255,255,0.9);
+}
+/* Character card */
+.beautify-panel-inline .beautify-char-card {
+  display: flex; gap: 12px; align-items: flex-start;
+  margin-bottom: 10px;
+}
+.beautify-panel-inline .beautify-char-avatar-wrap {
+  flex-shrink: 0;
+}
+.beautify-panel-inline .beautify-char-avatar {
+  width: 72px; height: 72px; border-radius: 12px;
+  background-size: cover; background-position: center top;
+  border: 2px solid rgba(255,255,255,0.25);
+  cursor: pointer; transition: transform 0.15s;
+}
+.beautify-panel-inline .beautify-char-avatar:hover { transform: scale(1.05); }
+.beautify-panel-inline .beautify-char-info {
+  flex: 1; min-width: 0;
+}
+.beautify-panel-inline .beautify-char-name {
+  font-weight: 700; font-size: 1.05em; color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+  margin-bottom: 4px;
+}
+.beautify-panel-inline .beautify-char-condition {
+  font-size: 0.72em; color: rgba(255,255,255,0.6);
+  line-height: 1.45; margin-bottom: 6px;
+}
+.beautify-panel-inline .beautify-stat-bars {
+  display: flex; flex-direction: column; gap: 2px;
+  max-width: 340px;
+}
+/* Badges */
+.beautify-panel-inline .beautify-badges {
+  display: flex; gap: 4px; margin-top: 4px;
+}
+.beautify-panel-inline .beautify-badge {
+  font-size: 0.63em; padding: 1px 7px; border-radius: 10px;
+  font-weight: 600; letter-spacing: 0.02em;
+}
+.beautify-panel-inline .badge-pregnant {
+  background: rgba(176,98,74,0.3); color: #e8a090;
+}
+.beautify-panel-inline .badge-stage {
+  background: rgba(90,138,154,0.3); color: #a0d0dd;
+}
+/* Sub-grid: 着装 + 身体 side by side */
+.beautify-panel-inline .beautify-sub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.beautify-panel-inline .beautify-sub-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.beautify-panel-inline .beautify-sub-title {
+  font-weight: 600; font-size: 0.72em;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.beautify-panel-inline .beautify-sub-row {
+  display: flex; gap: 6px; font-size: 0.7em;
+  padding: 2px 0; line-height: 1.4;
+}
+.beautify-panel-inline .beautify-sub-key {
+  color: rgba(255,255,255,0.4);
+  min-width: 52px; flex-shrink: 0;
+}
+.beautify-panel-inline .beautify-sub-val {
+  color: rgba(255,255,255,0.75);
+}
+/* Delta changes */
+.beautify-panel-inline .beautify-delta {
+  margin-top: 8px; padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.beautify-panel-inline .beautify-delta-item {
+  font-size: 0.66em; padding: 1px 0;
+  color: rgba(255,255,255,0.55);
+}
+.beautify-panel-inline .beautify-delta-key {
+  color: rgba(255,255,255,0.35);
+  margin-right: 4px;
+}
+.beautify-panel-inline .beautify-delta-old {
+  text-decoration: line-through;
+  color: rgba(255,255,255,0.3);
+  margin-right: 3px;
+}
+.beautify-panel-inline .beautify-delta-new {
+  color: #f0b878; font-weight: 600;
+}
+/* World tab info grid */
+.beautify-panel-inline .beautify-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 4px;
+}
+.beautify-panel-inline .beautify-info-card {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.75em;
+}
+.beautify-panel-inline .beautify-info-label {
+  color: rgba(255,255,255,0.45);
+  min-width: 48px; font-size: 0.9em;
+}
+.beautify-panel-inline .beautify-info-value {
+  color: rgba(255,255,255,0.85); font-weight: 500;
+}
+/* collapsible sub-sections (non-standard dicts) */
+.beautify-panel-inline .beautify-sub {
+  margin: 3px 0;
+  font-size: 0.72em;
+}
+.beautify-panel-inline .beautify-sub summary {
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
+  padding: 2px 0;
+}
+.beautify-panel-inline .beautify-sub summary:hover { color: rgba(255,255,255,0.7); }
+/* Stat bars (shared with sidebar, adapted for dark bg) */
+.beautify-panel-inline .tv-stat-row {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.7em; padding: 1px 0;
+}
+.beautify-panel-inline .tv-stat-label {
+  color: rgba(255,255,255,0.5); min-width: 44px; flex-shrink: 0;
+}
+.beautify-panel-inline .tv-stat-value {
+  color: rgba(255,255,255,0.85); font-weight: 600;
+  min-width: 24px; text-align: right;
+}
+.beautify-panel-inline .tv-stat-bar-bg {
+  flex: 1; height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px; overflow: hidden;
+}
+.beautify-panel-inline .tv-stat-bar-fill {
+  height: 100%; border-radius: 2px;
+  transition: width 0.5s ease;
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="dot green"></span>
+  <span class="dot yellow"></span>
+  <span class="dot red"></span>
+  <span class="tag" id="tb-world">—</span>
+  <span class="sep">|</span>
+  <span id="tb-stage">—</span>
+  <span class="sep">|</span>
+  <span class="dim" id="tb-time">—</span>
+  <span class="sep">|</span>
+  <span class="dim" id="tb-location">—</span>
+  <span class="spacer"></span>
+  <span class="dim" style="font-size:0.75em;" id="conn-label">桥接:</span>
+  <span id="conn-dot" class="dot red" title="服务器未连接"></span>
+  <span class="dim" id="tb-count">已生成: 0</span>
+  <span class="sep">|</span>
+  <span class="dim" id="tb-wordcount" title="最新回复字数 / 目标字数">字数: —</span>
+  <span class="sep">|</span>
+  <span class="dim" id="tb-tokens" title="本轮Token / 累计Token">Token: —</span>
+  <span class="sep">|</span>
+  <button id="theme-toggle" title="切换夜间模式" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:0.9em;padding:1px 6px;line-height:1;color:var(--muted);">🌙</button>
+</div>
+
+<div id="main">
+  <div id="content-panel">
+    <div id="doc">等待生成...</div>
+    <div id="beautify-container"></div>
+  </div>
+
+  <div id="sidebar">
+    <div class="side-card" id="actions-card" style="display:none;">
+      <h4>📂 可选项</h4>
+      <div id="sb-actions"></div>
+    </div>
+    <div class="side-card">
+      <h4>⚙️ 预设配置 <span id="settings-saved" style="margin-left:4px;">已保存</span></h4>
+      <div class="setting-row">
+        <span class="label">文风</span>
+        <select id="set-style" onchange="saveSettings(); updateStyleDescription()"></select>
+        <div id="style-desc" style="font-size:0.7em;color:var(--muted);margin-top:2px;line-height:1.4;"></div>
+      </div>
+      <div class="setting-row">
+        <span class="label">NSFW</span>
+        <select id="set-nsfw" onchange="saveSettings()">
+          <option>直白</option><option>舒缓</option><option>关闭</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="label">人称</span>
+        <select id="set-person" onchange="saveSettings()">
+          <option>第二人称</option><option>第三人称</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="label">字数控制</span>
+        <input type="number" id="set-wordcount" onchange="saveSettings()" min="100" max="6000" step="100" style="width:80px;text-align:center;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.78em;font-family:var(--font-ui);outline:none;">
+      </div>
+      <div class="setting-row">
+        <span class="label">防抢话</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="set-antiimp" onchange="saveSettings()" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span class="label">背景NPC</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="set-bgnpc" onchange="saveSettings()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="side-card">
+      <h4>📌 当前目标</h4>
+      <div style="color:var(--accent2);" id="sb-quest">—</div>
+    </div>
+    <div class="side-card" id="beautify-card" style="display:none;">
+      <h4>📊 状态面板</h4>
+      <div id="sb-beautify"></div>
+    </div>
+    <div class="side-card" id="mvu-card" style="display:none;">
+      <h4>🗃️ 变量</h4>
+      <div id="sb-mvu-vars"></div>
+    </div>
+    <div class="side-card" id="npcs-card" style="display:none;">
+      <h4>👥 场景人物</h4>
+      <div id="sb-npcs"></div>
+    </div>
+    <div class="side-card" id="openings-card" style="display:none;">
+      <h4>🎬 开场白</h4>
+      <select id="set-opening" onchange="doSwitchOpening()" style="width:100%;padding:4px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);font-size:0.78em;font-family:var(--font-ui);">
+      </select>
+    </div>
+    <div class="side-card">
+      <h4>📋 剧情摘要</h4>
+      <div class="summary-text" id="sb-summary">暂无</div>
+    </div>
+  </div>
+</div>
+
+<div id="input-panel">
+  <div class="input-row">
+    <textarea id="user-input" placeholder="在此输入你的回复或指令..." rows="2"></textarea>
+    <!-- 酒馆桥接元素：卡脚本期望的 send_textarea / send_but -->
+    <textarea id="send_textarea" style="display:none"></textarea>
+    <div id="send_but" style="display:none"></div>
+    <div class="btn-group">
+      <button class="btn-submit" onclick="doSubmit()">▶ 提交</button>
+      <button class="btn-secondary" onclick="doClear()">清空</button>
+    </div>
+  </div>
+  <div class="meta-row">
+    <span>你的角色名:</span>
+    <input id="player-name-input" placeholder="可选" value="" oninput="onPlayerNameChange();">
+    <span style="flex:1;"></span>
+    <span id="last-action" style="font-style:italic;"></span>
+  </div>
+</div>
+
+<div id="toast">✓ 已复制到剪贴板，请粘贴到 Claude Code</div>
+
+<!-- Portrait zoom modal -->
+<div id="beautify-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:9999;justify-content:center;align-items:center;cursor:zoom-out;" onclick="this.style.display='none'">
+  <img id="beautify-modal-img" src="" alt="立绘放大" style="max-width:95%;max-height:95vh;border:2px solid #8b6b4a;box-shadow:0 0 20px #000;border-radius:4px;object-fit:contain;">
+</div>
+
+<script src="_st_shims.js?v=2"></script>
+<script>
+// ═══ Dynamic script reloader (no page flash) ═══
+console.log('[RP-Frontend] Initialized. jQuery:', typeof jQuery, 'lodash:', typeof window._, 'toastr:', typeof toastr);
+let pollTimer = null;
+let lastStateMtime = 0;
+let lastContentMtime = 0;
+let _prevContentHtml = '';  // cache to avoid spurious innerHTML resets
+let _prevBeautifyHtml = '';  // separate cache for beautify panel
+
+var _consecutiveFailures = 0;
+
+function reloadData() {
+  // Reload state.js via dynamic script
+  const ts = Date.now();
+  const oldState = document.getElementById('_state_js');
+  if (oldState) oldState.remove();
+  const s = document.createElement('script');
+  s.id = '_state_js';
+  s.src = 'state.js?v=' + ts;
+  s.onload = () => {
+    _consecutiveFailures = 0;
+    if (window.STATE) lastStateMtime = ts;
+    const oldContent = document.getElementById('_content_js');
+    if (oldContent) oldContent.remove();
+    const c = document.createElement('script');
+    c.id = '_content_js';
+    c.src = 'content.js?v=' + ts;
+    c.onload = () => { _consecutiveFailures = 0; if (window.CONTENT_HTML !== undefined) lastContentMtime = ts; render(); };
+    c.onerror = () => { _consecutiveFailures++; if (_consecutiveFailures >= 3) showError('内容加载失败，请刷新页面'); render(); };
+    document.head.appendChild(c);
+  };
+  s.onerror = () => {
+    _consecutiveFailures++;
+    const oldContent = document.getElementById('_content_js');
+    if (oldContent) oldContent.remove();
+    const c = document.createElement('script');
+    c.id = '_content_js';
+    c.src = 'content.js?v=' + ts;
+    c.onload = () => { _consecutiveFailures = 0; if (window.CONTENT_HTML !== undefined) lastContentMtime = ts; render(); };
+    c.onerror = () => { _consecutiveFailures++; if (_consecutiveFailures >= 3) showError('内容加载失败，请刷新页面'); render(); };
+    document.head.appendChild(c);
+  };
+  document.head.appendChild(s);
+}
+
+function countChineseChars(html) {
+  // Strip HTML tags, entities, whitespace, and punctuation
+  const text = html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&[^;]+;/g, '')
+    .replace(/[\s\n\r]/g, '');
+  // Count CJK characters (Chinese, Japanese kanji) + letters/numbers as words
+  const cjk = text.match(/[一-鿿㐀-䶿]/g);
+  const alpha = text.match(/[a-zA-Z0-9]+/g);
+  return (cjk ? cjk.length : 0) + (alpha ? alpha.length : 0);
+}
+
+function updateWordCount() {
+  const el = document.getElementById('tb-wordcount');
+  if (!el) return;
+  const target = parseInt(document.getElementById('set-wordcount').value) || 600;
+  const threshold = Math.floor(target * 0.8);
+
+  // Get last AI turn text
+  const turns = document.querySelectorAll('.turn-ai .turn-text');
+  if (turns.length === 0) { el.textContent = '字数: —'; el.style.color = ''; return; }
+  const lastTurn = turns[turns.length - 1];
+  const count = countChineseChars(lastTurn.innerHTML);
+
+  let color;
+  if (count >= target) {
+    color = '#5a7a5a'; // green - met or exceeded
+  } else if (count >= threshold) {
+    color = '#cc9a56'; // amber - within 80%
+  } else {
+    color = '#b0624a'; // red - below 80%
+  }
+  el.textContent = '字数: ' + count + '/' + target;
+  el.style.color = color;
+  el.title = count >= target ? '已达到目标字数' :
+    count >= threshold ? '接近目标字数 (≥80%)' :
+    '⚠ 未达目标字数的80%，建议重roll';
+}
+
+function userName() {
+  const el = document.getElementById('player-name-input');
+  if (!el || el.value === undefined) return '{{user}}';
+  const v = el.value.trim();
+  return v || '{{user}}';
+}
+
+function syncPlayerName() {
+  // Sync #player-name-input from MVU variables (initvar) on first load.
+  // The card stores the user reference under 主角.基础信息.姓名 (protagonist path),
+  // not under a separate 玩家 key.
+  var vars = window.MVU_VARIABLES;
+  if (!vars) return;
+  var playerName = '';
+  if (vars['主角'] && vars['主角']['基础信息'] && vars['主角']['基础信息']['姓名']) {
+    playerName = vars['主角']['基础信息']['姓名'];
+  }
+  if (!playerName || playerName === '{{user}}' || playerName === '{[user]}') return;
+  var input = document.getElementById('player-name-input');
+  if (input && input.tagName === 'INPUT' && !input.dataset.synced && (!input.value || input.value === '{{user}}')) {
+    input.value = playerName;
+    input.dataset.synced = '1';
+  }
+}
+
+function onPlayerNameChange() {
+  var input = document.getElementById('player-name-input');
+  if (!input || input.tagName !== 'INPUT') return;
+  var vars = window.MVU_VARIABLES;
+  if (!vars) return;
+  if (!vars['主角']) vars['主角'] = {};
+  if (!vars['主角']['基础信息']) vars['主角']['基础信息'] = {};
+  var newName = input.value.trim();
+  if (newName && newName !== '{{user}}') {
+    vars['主角']['基础信息']['姓名'] = newName;
+  }
+}
+
+function replaceUser(s) {
+  if (!s) return s;
+  const name = userName();
+  const replacement = (name !== '{{user}}') ? name : '{{user}}';
+  s = s.split('{{user}}').join(replacement);
+  s = s.split('{[user]}').join(replacement);
+  return s;
+}
+
+function applyBeautifyCSS() {
+  var beautifyData = window.BEAUTIFY_DATA || {};
+  var cssSource = beautifyData.panel_css || beautifyData.panel_inline_css || '';
+  var oldStyle = document.getElementById('_beautify_css');
+  if (oldStyle) oldStyle.remove();
+  if (cssSource) {
+    var style = document.createElement('style');
+    style.id = '_beautify_css';
+    style.textContent = cssSource;
+    document.head.appendChild(style);
+  }
+}
+
+// ═══ Client-side macro resolver — mirrors MVU engine display-time resolution ═══
+// In the real MVU pipeline, {{format_message_variable::stat_data.XXX}} macros
+// are resolved dynamically at render time against the live stat_data tree.
+// We replicate that here so the beautify panel always reflects current state.
+function resolveBeautifyMacros(html) {
+  if (!html || html.indexOf('{{') < 0) return html;
+  var vars = window.MVU_VARIABLES || {};
+  var statData = vars.stat_data || vars;
+
+  function _lookup(pathStr) {
+    // Strip stat_data. prefix — window.MVU_VARIABLES is the stat_data root
+    var p = pathStr;
+    if (p.indexOf('stat_data.') === 0) p = p.slice(10);
+    var keys = p.split('.');
+    var cur = statData;
+    for (var i = 0; i < keys.length; i++) {
+      if (cur == null || typeof cur !== 'object') return null;
+      cur = cur[keys[i]];
+    }
+    return cur;
+  }
+
+  function _format(v) {
+    if (v === null || v === undefined) return '(未定义)';
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+    // Nested objects: render as compact key: value lines
+    if (typeof v === 'object' && !Array.isArray(v)) {
+      var lines = [];
+      var keys = Object.keys(v);
+      for (var ki = 0; ki < keys.length; ki++) {
+        var kv = v[keys[ki]];
+        if (kv !== null && typeof kv === 'object') {
+          lines.push(keys[ki] + ': ' + JSON.stringify(kv));
+        } else {
+          lines.push(keys[ki] + ': ' + String(kv !== undefined ? kv : '—'));
+        }
+      }
+      return lines.join(', ');
+    }
+    if (Array.isArray(v)) {
+      return v.map(function(item) {
+        return typeof item === 'object' ? JSON.stringify(item) : String(item);
+      }).join(', ');
+    }
+    return String(v);
+  }
+
+  // {{format_message_variable::stat_data.XXX}} → formatted value
+  html = html.replace(/\{\{format_message_variable::stat_data\.([^}]+)\}\}/g, function(_, path) {
+    return _format(_lookup(path));
+  });
+
+  // {{format_message_variable::XXX}} without stat_data prefix → from root
+  html = html.replace(/\{\{format_message_variable::([^}]+)\}\}/g, function(_, path) {
+    return _format(_lookup(path));
+  });
+
+  // {{getvar::stat_data.XXX}} → scalar value (bare, no formatting)
+  html = html.replace(/\{\{getvar::stat_data\.([^}]+)\}\}/g, function(_, path) {
+    var v = _lookup(path);
+    return (v !== null && v !== undefined) ? String(v) : '(未定义)';
+  });
+
+  // {{getvar::XXX}} without stat_data prefix
+  html = html.replace(/\{\{getvar::([^}]+)\}\}/g, function(_, path) {
+    var v = _lookup(path);
+    return (v !== null && v !== undefined) ? String(v) : '(未定义)';
+  });
+
+  return html;
+}
+
+function render() {
+  if (!window.STATE) return;
+
+  syncPlayerName();
+  const S = window.STATE;
+  document.title = (S.world || 'RP') + ' — ' + (S.stage || '');
+
+  // Top bar (only update if changed to avoid DOM flicker)
+  setText('tb-world', replaceUser(S.world || '—'));
+  setText('tb-stage', S.stage || '—');
+  setText('tb-time', S.time || '—');
+  setText('tb-location', S.location || '—');
+  setText('tb-count', '已生成: ' + (S.generatedCount || 0));
+
+  // Content — only replace DOM when the source string actually
+  // changed.  Comparing against live innerHTML would fire every poll
+  // because initApp() mutates the DOM (flip-card backs, etc.), which
+  // would destroy card state and re-run scripts unnecessarily.
+  const contentEl = document.getElementById('doc');
+  let newContent = window.CONTENT_HTML || '<div style="padding:60px;text-align:center;color:var(--muted);">等待生成内容...</div>';
+  newContent = replaceUser(newContent);
+  // Apply card author's regex scripts via SillyTavern-compatible engine.
+  // Uses getRegexedString() from _regex_engine.js with proper placement
+  // filtering (markdownOnly/promptOnly/placement/depth).
+  var regexScripts = window.REGEX_SCRIPTS || [];
+  if (regexScripts.length && typeof window.registerRegexScripts === 'function') {
+    window.registerRegexScripts(regexScripts);
+    newContent = window.getRegexedString(newContent, 2 /* AI_OUTPUT */, { isMarkdown: true });
+  }
+  if (_prevContentHtml !== newContent) {
+    _prevContentHtml = newContent;
+    contentEl.innerHTML = newContent;
+    // Re-execute embedded <script> tags (innerHTML doesn't run them).
+    // The _st_shims.js globals are already loaded, so card-author
+    // beautify scripts find their expected ST/MVU APIs.
+    var embScripts = contentEl.querySelectorAll('script');
+    for (var si = 0; si < embScripts.length; si++) {
+      var oldS = embScripts[si];
+      var newS = document.createElement('script');
+      if (oldS.textContent) {
+        newS.textContent = 'try {\n' + oldS.textContent + '\n} catch(e) { console.error("[card-script] Execution error:", e); if (typeof toastr !== "undefined") toastr.error("[card-script] " + e.message); }';
+      }
+      if (oldS.src) newS.src = oldS.src;
+      oldS.parentNode.replaceChild(newS, oldS);
+    }
+    // Only auto-scroll if user is already near the bottom
+    const panel = document.getElementById('content-panel');
+    if (panel) {
+      const distToBottom = panel.scrollHeight - (panel.scrollTop + panel.clientHeight);
+      if (distToBottom < 200) {
+        setTimeout(() => { panel.scrollTop = panel.scrollHeight; }, 80);
+      }
+    }
+  }
+
+  // Beautify panel — rendered independently of narrative content.
+  // Macros ({{format_message_variable::stat_data.XXX}}) are resolved
+  // client-side against window.MVU_VARIABLES at display time, mirroring
+  // the real MVU pipeline. Resolution runs every poll cycle so variable
+  // updates are reflected immediately without a server round-trip.
+  const beautifyEl = document.getElementById('beautify-container');
+  let rawBeautify = window.BEAUTIFY_HTML || '';
+  let newBeautify = resolveBeautifyMacros(rawBeautify);
+  newBeautify = replaceUser(newBeautify);
+  if (_prevBeautifyHtml !== newBeautify) {
+    _prevBeautifyHtml = newBeautify;
+    beautifyEl.innerHTML = newBeautify;
+    var embScriptsB = beautifyEl.querySelectorAll('script');
+    for (var sj = 0; sj < embScriptsB.length; sj++) {
+      var oldSB = embScriptsB[sj];
+      var newSB = document.createElement('script');
+      if (oldSB.textContent) {
+        newSB.textContent = 'try {\n' + oldSB.textContent + '\n} catch(e) { console.error("[beautify-script] Execution error:", e); }';
+      }
+      if (oldSB.src) newSB.src = oldSB.src;
+      oldSB.parentNode.replaceChild(newSB, oldSB);
+    }
+    console.log('[beautify] Re-executed ' + embScriptsB.length + ' script(s), jQuery=' + (typeof $) + ', _=' + (typeof _));
+  }
+
+  // Sidebar
+  setText('sb-quest', replaceUser(S.quest || '—'));
+  const sum = replaceUser(window.SUMMARY_TEXT || '暂无');
+  setText('sb-summary', sum);
+
+  // Actions — prefer per-turn TURN_OPTIONS, fall back to static S.actions
+  const actionsCard = document.getElementById('actions-card');
+  const turnOpts = window.TURN_OPTIONS;
+  const actionsH4 = actionsCard.querySelector('h4');
+  const actionsDiv = document.getElementById('sb-actions');
+  if (turnOpts && turnOpts.length > 0) {
+    actionsCard.style.display = '';
+    if (actionsH4) actionsH4.innerHTML = '🎯 下一步行动' + (S.generatedCount > 0 ? ' <button class="btn-reroll" onclick="doReroll()" title="重roll最后一轮">🔄</button>' : '');
+    renderOptions(actionsDiv, turnOpts);
+  } else if (S.actions && S.actions.length > 0) {
+    actionsCard.style.display = '';
+    if (actionsH4) actionsH4.innerHTML = '📂 可选项' + (S.generatedCount > 0 ? ' <button class="btn-reroll" onclick="doReroll()" title="重roll最后一轮">🔄</button>' : '');
+    renderOptions(actionsDiv, S.actions);
+  } else {
+    actionsCard.style.display = 'none';
+  }
+
+
+  // NPCs
+  const npcsCard = document.getElementById('npcs-card');
+  if (S.npcs && S.npcs.length > 0) {
+    npcsCard.style.display = '';
+    setHtml('sb-npcs', S.npcs.map(n =>
+      `<span class="chip ${n.important ? 'chip-hot' : 'chip-normal'}">${replaceUser(n.name)}</span>`
+    ).join(''));
+  } else {
+    npcsCard.style.display = 'none';
+  }
+
+  // MVU Variables
+  renderMvuVars();
+
+  // Beautify Dashboard
+  renderBeautify();
+
+  // Inject per-turn delete buttons
+  injectTurnButtons();
+
+  // Word count check
+  updateWordCount();
+
+  // Token count display
+  updateTokenCount();
+
+  // Openings switcher visibility
+  updateOpeningsCard(S);
+
+  // Notify beautify panel of fresh variable data.
+  // Matches real MVU lifecycle: mag_variable_update_ended fires after
+  // all updates for the reply are complete.  The card-author beautify
+  // script registered eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, renderData)
+  // inside initApp(), so this triggers a data refresh without DOM reset.
+  if (window.eventEmit && window.Mvu) {
+    window.eventEmit(window.Mvu.events.VARIABLE_UPDATE_ENDED);
+  }
+}
+
+function updateOpeningsCard(S) {
+  const card = document.getElementById('openings-card');
+  const sel = document.getElementById('set-opening');
+  if (sel.options.length > 1) {
+    card.style.display = '';
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+
+function injectTurnButtons() {
+  const doc = document.getElementById('doc');
+  const turns = doc.querySelectorAll('.turn-wrap');
+  turns.forEach(function(turn, i) {
+    // Remove existing btn if any
+    const old = turn.querySelector('.btn-turn-del');
+    if (old) old.remove();
+    // Don't add delete on first opening turn (index 0) if we want to keep the opener
+    const btn = document.createElement('button');
+    btn.className = 'btn-turn-del';
+    btn.textContent = '↩ 回退到此';
+    btn.title = '删除此轮及之后所有内容';
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (btn.classList.contains('confirming')) {
+        doDeleteFrom(i);
+      } else {
+        btn.classList.add('confirming');
+        btn.textContent = '确认回退？';
+        setTimeout(function() {
+          btn.classList.remove('confirming');
+          btn.textContent = '↩ 回退到此';
+        }, 3000);
+      }
+    });
+    const aiDiv = turn.querySelector('.turn-ai');
+    if (aiDiv) aiDiv.appendChild(btn);
+  });
+}
+
+// DOM helpers that only touch if changed
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el && el.textContent !== val) el.textContent = val;
+}
+function setHtml(id, val) {
+  const el = document.getElementById(id);
+  if (el && el.innerHTML !== val) el.innerHTML = val;
+}
+
+function renderOptions(container, opts) {
+  container.innerHTML = '';
+  opts.forEach(function(optHtml) {
+    const span = document.createElement('span');
+    span.className = 'chip-action';
+    span.innerHTML = optHtml;
+    span.addEventListener('click', function() {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = optHtml;
+      const plainText = (tmp.textContent || tmp.innerText || '').trim();
+      const ta = document.getElementById('user-input');
+      ta.value = ta.value ? ta.value + '\n' + plainText : plainText;
+      ta.focus();
+    });
+    container.appendChild(span);
+  });
+}
+
+function pickAction(action) {
+  const ta = document.getElementById('user-input');
+  const tmp = document.createElement('div');
+  tmp.innerHTML = action;
+  const plainText = (tmp.textContent || tmp.innerText || action).trim();
+  ta.value = ta.value ? ta.value + '\n' + plainText : plainText;
+  ta.focus();
+}
+
+const BRIDGE = 'http://localhost:8765';
+let bridgeOk = false;
+
+// ═══ 酒馆桥接：卡脚本 → 我们前端 ═══
+// 卡内嵌脚本使用 SillyTavern 标准元素 ID:
+//   #send_textarea (输入框)  #send_but (发送按钮)
+// 这些隐藏元素接收卡脚本的写入/点击，同步到我们的 #user-input / doSubmit()
+$(function() {
+  var $st = $('#send_textarea');
+  var $ui = $('#user-input');
+  $st.on('input change', function() {
+    $ui.val($st.val());
+  });
+  $('#send_but').on('click', function() {
+    $ui.val($st.val() || $ui.val());
+    doSubmit();
+  });
+});
+
+async function doReroll() {
+  const btn = document.querySelector('.btn-reroll');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const r = await fetch(BRIDGE + '/api/reroll', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('🔄 已触发重roll，等待重新生成...');
+      // Poll more frequently for a bit
+      let tries = 0;
+      const check = setInterval(function() {
+        reloadData();
+        tries++;
+        if (tries > 20) clearInterval(check); // stop after ~60s
+      }, 2500);
+      setTimeout(function() { clearInterval(check); }, 60000);
+    } else {
+      showError('重roll失败: ' + (data.error || '未知错误'));
+    }
+  } catch(e) {
+    showError('无法连接服务器');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
+}
+
+async function loadOpenings() {
+  try {
+    const r = await fetch(BRIDGE + '/api/openings');
+    if (!r.ok) return;
+    const openings = await r.json();
+    const sel = document.getElementById('set-opening');
+    sel.innerHTML = openings.map(function(o) {
+      return '<option value=\"' + o.id + '\">' + o.label + '</option>';
+    }).join('');
+    if (openings.length <= 1) {
+      document.getElementById('openings-card').style.display = 'none';
+    }
+  } catch(e) { /* server not ready */ }
+}
+
+async function doSwitchOpening() {
+  const sel = document.getElementById('set-opening');
+  const openingId = parseInt(sel.value);
+  if (isNaN(openingId)) return;
+  try {
+    const r = await fetch(BRIDGE + '/api/switch_opening', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ opening_id: openingId })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('✓ 已切换开场白');
+      reloadData();
+    } else {
+      showError('切换失败: ' + (data.error || '未知错误'));
+    }
+  } catch(e) {
+    showError('无法连接服务器');
+  }
+}
+
+async function doDeleteFrom(index) {
+  try {
+    const r = await fetch(BRIDGE + '/api/delete_turns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from_index: index })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('✓ 已回退，可重新输入');
+      reloadData();
+    } else {
+      showError('回退失败: ' + (data.error || '未知错误'));
+    }
+  } catch(e) {
+    showError('无法连接服务器');
+  }
+}
+
+async function checkBridge() {
+  try {
+    const r = await fetch(BRIDGE + '/api/pending');
+    bridgeOk = r.ok;
+  } catch(e) {
+    bridgeOk = false;
+  }
+  document.getElementById('conn-dot').className = bridgeOk ? 'dot green' : 'dot red';
+  document.getElementById('conn-dot').title = bridgeOk ? '服务器已连接' : '服务器未连接 — 请运行 python skills/server.py';
+}
+
+async function doSubmit() {
+  console.log('[RP-Frontend] doSubmit called');
+  const input = document.getElementById('user-input').value.trim();
+  const charNameEl = document.querySelector('#input-panel input[id*="char-name"]');
+  const charName = charNameEl ? charNameEl.value.trim() : '';
+  if (!input) return;
+
+  const btn = document.querySelector('.btn-submit');
+  btn.disabled = true; btn.textContent = '...';
+
+  try {
+    const r = await fetch(BRIDGE + '/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: input, charName: charName })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      document.getElementById('user-input').value = '';
+      const toast = document.getElementById('toast');
+      toast.textContent = '✓ 已发送，等待 Claude Code 回应...';
+      toast.style.background = 'var(--accent2)';
+      toast.classList.add('show');
+      document.getElementById('last-action').textContent = '上次提交: ' + new Date().toLocaleTimeString();
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    } else {
+      showError('发送失败: ' + (data.error || '未知错误'));
+    }
+  } catch(e) {
+    showError('无法连接服务器 — 请确保已运行 python skills/server.py');
+  }
+  btn.disabled = false; btn.textContent = '▶ 提交';
+}
+
+function showError(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = '✗ ' + msg;
+  toast.style.background = '#b0624a';
+  toast.classList.add('show');
+  setTimeout(() => { toast.classList.remove('show'); toast.style.background = 'var(--accent2)'; }, 3000);
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.style.background = 'var(--accent2)';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function doClear() {
+  document.getElementById('user-input').value = '';
+  document.getElementById('user-input').focus();
+}
+
+document.getElementById('user-input').addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); doSubmit(); }
+});
+
+// ═══ Settings ═══
+let styleProfiles = [];
+
+async function loadStyleProfiles() {
+  try {
+    const r = await fetch(BRIDGE + '/api/style-profiles');
+    if (!r.ok) return;
+    styleProfiles = await r.json();
+    const sel = document.getElementById('set-style');
+    const currentValue = sel.value;
+    sel.innerHTML = styleProfiles.map(function(p) {
+      return '<option value="' + p.name + '">' + p.title + '</option>';
+    }).join('');
+    if (currentValue) sel.value = currentValue;
+    updateStyleDescription();
+  } catch(e) { /* server not ready */ }
+}
+
+function updateStyleDescription() {
+  const sel = document.getElementById('set-style');
+  const name = sel ? sel.value : '';
+  const profile = styleProfiles.find(function(p) { return p.name === name; });
+  const desc = document.getElementById('style-desc');
+  if (desc) desc.textContent = profile ? profile.description : '';
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch(BRIDGE + '/api/settings');
+    if (!r.ok) return;
+    const s = await r.json();
+    await loadStyleProfiles();
+    document.getElementById('set-style').value = s.style || '北棱特调';
+    updateStyleDescription();
+    document.getElementById('set-nsfw').value = s.nsfw || '直白';
+    document.getElementById('set-person').value = s.person || '第二人称';
+    document.getElementById('set-antiimp').checked = s.antiImpersonation !== false;
+    document.getElementById('set-bgnpc').checked = s.bgNpc === true;
+    document.getElementById('set-wordcount').value = s.wordCount || 600;
+    if (s.charName) document.getElementById('player-name-input').value = s.charName;
+    render();
+  } catch(e) { /* server may not be ready yet */ }
+}
+
+async function saveSettings() {
+  const data = {
+    style: document.getElementById('set-style').value,
+    nsfw: document.getElementById('set-nsfw').value,
+    person: document.getElementById('set-person').value,
+    antiImpersonation: document.getElementById('set-antiimp').checked,
+    bgNpc: document.getElementById('set-bgnpc').checked,
+    wordCount: parseInt(document.getElementById('set-wordcount').value) || 600,
+    charName: document.getElementById('player-name-input').value.trim()
+  };
+  try {
+    await fetch(BRIDGE + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    updateStyleDescription();
+    const badge = document.getElementById('settings-saved');
+    badge.classList.add('show');
+    setTimeout(() => badge.classList.remove('show'), 1500);
+  } catch(e) { /* offline */ }
+}
+
+// Also save char name when it changes
+function onCharNameChange() {
+  saveSettings();
+  render();
+}
+document.getElementById('player-name-input').addEventListener('input', function() {
+  // Debounce
+  clearTimeout(this._timer);
+  this._timer = setTimeout(onCharNameChange, 600);
+});
+
+function updateTokenCount() {
+  var el = document.getElementById('tb-tokens');
+  if (!el) return;
+  var turnTokens = window.TURN_TOKENS || {};
+  var startupCost = window.STARTUP_COST || {};
+  var keys = Object.keys(turnTokens);
+  var parts = [];
+
+  // Startup cost (one-time import/setup — persistent line item)
+  var startupTotal = startupCost.total || 0;
+  if (startupTotal > 0) {
+    parts.push('启动 ' + formatNum(startupTotal));
+  }
+
+  if (keys.length > 0) {
+    var last = turnTokens[keys[keys.length - 1]];
+    // Skip per-round display for opening turn — its tokens are the startup cost
+    var isOpening = (keys.length === 1 && last.is_startup);
+    if (!isOpening) {
+      var roundTotal = last.round_total || last.total || 0;
+      if (roundTotal > 0) {
+        parts.push('本轮 ' + formatNum(roundTotal));
+      }
+    }
+    // Cache hit rate (prefer latest round, fall back to startup)
+    var cacheHit = last.cache_hit || startupCost.cache_hit || 0;
+    if (cacheHit > 0) {
+      parts.push('缓存 ' + cacheHit.toFixed(1) + '%');
+    }
+  } else if (startupCost.cache_hit && startupCost.cache_hit > 0) {
+    parts.push('缓存 ' + startupCost.cache_hit.toFixed(1) + '%');
+  }
+
+  // Cumulative total
+  var cumulativeTotal = 0;
+  if (keys.length > 0) {
+    var last = turnTokens[keys[keys.length - 1]];
+    cumulativeTotal = last.cumulative_total || 0;
+  }
+  if (!cumulativeTotal) {
+    cumulativeTotal = (window.STATE && window.STATE.totalTokens) ? window.STATE.totalTokens : 0;
+  }
+  if (cumulativeTotal > 0) {
+    parts.push('累计 ' + formatNum(cumulativeTotal));
+  }
+  el.textContent = parts.length > 0 ? 'Token: ' + parts.join(' | ') : 'Token: —';
+}
+
+// ═══ MVU Variables Panel ═══
+
+function renderMvuVars() {
+  // MVU variable tree now rendered server-side in inline beautify panel
+  var card = document.getElementById('mvu-card');
+  if (card) card.style.display = 'none';
+}
+
+function _renderMvuTree(data, delta, pathPrefix) {
+  if (data === null || data === undefined) return '<span class="mvu-null">null</span>';
+
+  var type = Array.isArray(data) ? 'array' : typeof data;
+
+  if (type === 'string' || type === 'number' || type === 'boolean') {
+    var valClass = type === 'string' ? 'mvu-str' : (type === 'number' ? 'mvu-num' : 'mvu-bool');
+    var fullPath = pathPrefix;
+    var isDelta = delta.hasOwnProperty(fullPath) || delta.hasOwnProperty(fullPath.replace(/^\./, ''));
+    return '<span class="' + valClass + (isDelta ? ' mvu-delta' : '') + '">' + String(data) + '</span>';
+  }
+
+  if (type === 'object') {
+    var keys = Object.keys(data);
+    if (keys.length === 0) return '<span class="mvu-empty">(empty)</span>';
+
+    var html = '<details' + (keys.length <= 3 ? ' open' : '') + '><summary>' + (Array.isArray(data) ? '[' + keys.length + ']' : '{' + keys.length + ' keys}') + '</summary>';
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (k.indexOf('$') === 0) continue; // Skip $meta / $internal
+      var v = data[k];
+      var childPath = pathPrefix + '.' + k;
+      var entryClass = '';
+      if (delta) {
+        for (var dk in delta) {
+          if (dk === childPath || dk.indexOf(childPath + '.') === 0 || dk.indexOf(childPath + '[') === 0) {
+            entryClass = ' mvu-delta';
+            break;
+          }
+        }
+      }
+      html += '<div class="mvu-entry' + entryClass + '"><span class="mvu-key">' + k + ':</span> ';
+      if (v !== null && (typeof v === 'object')) {
+        html += _renderMvuTree(v, delta, childPath);
+      } else {
+        html += _renderMvuTree(v, delta, childPath);
+      }
+      html += '</div>';
+    }
+    html += '</details>';
+    return html;
+  }
+
+  return '<span>' + String(data) + '</span>';
+}
+
+function formatNum(n) {
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+
+// ═══ Generic Status Panel (driven by card's initvar) ═══
+// Detects initvar structure and renders appropriately:
+//   - Tabbed sections for objects containing similar sub-objects (e.g., NPCs)
+//   - Key-value lists for flat/simple objects
+//   - Portraits if BEAUTIFY_PORTRAITS is populated for matching keys
+
+function renderBeautify() {
+  // Beautify dashboard now rendered server-side in inline panel
+  var card = document.getElementById('beautify-card');
+  if (card) card.style.display = 'none';
+  return;
+
+  // ── Discover tabs from variable structure ──
+  var topKeys = Object.keys(vars);
+  // Group: flat objects/scalars → "概况" tab; objects-with-subobjects → individual tabs
+  var overviewItems = [];
+  var subTabs = []; // [{key, subKeys, isRecord: bool}]
+  for (var i = 0; i < topKeys.length; i++) {
+    var k = topKeys[i];
+    var v = vars[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      var childKeys = Object.keys(v);
+      var hasNestedObj = false;
+      for (var ci = 0; ci < childKeys.length; ci++) {
+        var cv = v[childKeys[ci]];
+        if (cv && typeof cv === 'object' && !Array.isArray(cv)) { hasNestedObj = true; break; }
+      }
+      if (hasNestedObj && childKeys.length > 0) {
+        // Object containing sub-objects → individual tabs per sub-key
+        for (var ci2 = 0; ci2 < childKeys.length; ci2++) {
+          subTabs.push({topKey: k, subKey: childKeys[ci2], parent: k});
+        }
+      } else {
+        // Flat object (or empty record) → overview + its own tab
+        subTabs.push({topKey: k, subKey: null, parent: null});
+      }
+    } else {
+      // Scalar/array at top level → overview
+      overviewItems.push(k);
+    }
+  }
+
+  // Active tab persistence
+  if (!window._beautifyActiveTab) window._beautifyActiveTab = '_overview';
+  var activeTab = window._beautifyActiveTab;
+  // Validate active tab still exists
+  var validTabs = ['_overview'];
+  for (var ti = 0; ti < subTabs.length; ti++) {
+    validTabs.push(subTabs[ti].topKey + (subTabs[ti].subKey ? '|||' + subTabs[ti].subKey : ''));
+  }
+  if (validTabs.indexOf(activeTab) < 0) {
+    activeTab = '_overview';
+    window._beautifyActiveTab = '_overview';
+  }
+
+  var S = window.STATE || {};
+  var beautifyData = window.BEAUTIFY_DATA || {};
+
+  // ── Dynamic title ──
+  var panelTitle = beautifyData.panel_title || (S.world ? S.world + ' · 状态栏' : 'MVU · 状态栏');
+  var panelKicker = beautifyData.panel_kicker || '变量追踪 · MVU';
+
+  var html = '<div class="beautify-dashboard">';
+
+  // ── Header ──
+  html += '<div class="beautify-header">';
+  html += '<div class="beautify-header-kicker">' + escHtml(panelKicker) + '</div>';
+  html += '<div class="beautify-header-title">' + escHtml(panelTitle) + '</div>';
+  html += '<div class="beautify-meta-chips">';
+  html += '<span class="beautify-meta-chip">' + escHtml(S.time || '—') + '</span>';
+  html += '<span class="beautify-meta-chip">' + escHtml(S.world || '—') + '</span>';
+  html += '</div></div>';
+
+  // ── Tabs ──
+  html += '<div class="beautify-tabs">';
+  html += '<div class="beautify-tab-btn' + (activeTab === '_overview' ? ' active' : '') + '" data-tab="_overview">概况</div>';
+  for (var ti2 = 0; ti2 < subTabs.length; ti2++) {
+    var st = subTabs[ti2];
+    var tabId = st.topKey + (st.subKey ? '|||' + st.subKey : '');
+    var tabLabel = st.subKey || st.topKey;
+    html += '<div class="beautify-tab-btn' + (activeTab === tabId ? ' active' : '') + '" data-tab="' + escHtml(tabId) + '">' + escHtml(tabLabel) + '</div>';
+  }
+  html += '</div>';
+
+  // ── Body ──
+  html += '<div class="beautify-body">';
+
+  if (activeTab === '_overview') {
+    // Overview: show all top-level scalar values + flat object summaries
+    html += '<div class="beautify-info-grid">';
+    for (var oi = 0; oi < topKeys.length; oi++) {
+      var ok = topKeys[oi];
+      var ov = vars[ok];
+      if (ov === null || ov === undefined) {
+        html += _biCard(ok, '—');
+      } else if (typeof ov === 'object' && !Array.isArray(ov)) {
+        var childCount = Object.keys(ov).length;
+        if (childCount === 0) {
+          html += _biCard(ok, '(空)');
+        } else {
+          // Show first few keys as summary
+          var previewKeys = Object.keys(ov).slice(0, 3);
+          var preview = previewKeys.map(function(pk) { return pk + ': ' + _fmtScalar(ov[pk]); }).join(' / ');
+          if (childCount > 3) preview += ' ... (+' + (childCount - 3) + ')';
+          html += _biCard(ok, preview);
+        }
+      } else if (Array.isArray(ov)) {
+        html += _biCard(ok, '[' + ov.length + ' 项]');
+      } else {
+        html += _biCard(ok, _fmtScalar(ov));
+      }
+    }
+    html += '</div>';
+  } else {
+    // Find the active sub-tab
+    var activeParts = activeTab.split('|||');
+    var activeTopKey = activeParts[0];
+    var activeSubKey = activeParts.length > 1 ? activeParts[1] : null;
+    var activeData = vars[activeTopKey];
+
+    if (activeSubKey && activeData && activeData[activeSubKey] && typeof activeData[activeSubKey] === 'object') {
+      // Sub-object detail
+      var detail = activeData[activeSubKey];
+      html += '<div class="beautify-partner-header">';
+      // Portrait thumbnail if available
+      var portrait = BEAUTIFY_PORTRAITS[activeSubKey];
+      if (portrait && portrait.normal && portrait.normal.length > 0) {
+        var pidx = (window._beautifyPortraitIdx && window._beautifyPortraitIdx[activeSubKey]) || 0;
+        html += '<img class="beautify-portrait-thumb" src="' + escHtml(portrait.normal[pidx]) + '" onclick="event.stopPropagation();zoomPortrait(\'' + escHtml(portrait.normal[pidx]) + '\')" title="点击放大">';
+      }
+      html += '<span class="beautify-partner-name">' + escHtml(activeSubKey) + '</span>';
+      html += '</div>';
+      html += '<div class="beautify-detail-grid">';
+      var detailKeys = Object.keys(detail);
+      for (var dk = 0; dk < detailKeys.length; dk++) {
+        var dkk = detailKeys[dk];
+        var dv = detail[dkk];
+        if (dv && typeof dv === 'object' && !Array.isArray(dv)) {
+          // Nested sub-object: render inline
+          html += '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin:8px 0 4px;">' + escHtml(dkk) + '</div>';
+          var nestedKeys = Object.keys(dv);
+          for (var nk = 0; nk < nestedKeys.length; nk++) {
+            html += _bdItem(nestedKeys[nk], _fmtScalar(dv[nestedKeys[nk]]));
+          }
+        } else {
+          html += _bdItem(dkk, _fmtScalar(dv));
+        }
+      }
+      html += '</div>';
+    } else if (activeData && typeof activeData === 'object' && !Array.isArray(activeData)) {
+      // Flat object detail
+      var flatKeys = Object.keys(activeData);
+      if (flatKeys.length === 0) {
+        html += '<div class="beautify-empty">暂无数据</div>';
+      } else {
+        html += '<div class="beautify-info-grid">';
+        for (var fk = 0; fk < flatKeys.length; fk++) {
+          var fkk = flatKeys[fk];
+          html += _biCard(fkk, _fmtScalar(activeData[fkk]));
+        }
+        html += '</div>';
+      }
+    } else {
+      html += '<div class="beautify-empty">暂无数据</div>';
+    }
+  }
+
+  html += '</div>'; // close beautify-body
+  html += '</div>'; // close beautify-dashboard
+  div.innerHTML = html;
+
+  // Re-bind tab clicks
+  var tabs = div.querySelectorAll('.beautify-tab-btn');
+  for (var j = 0; j < tabs.length; j++) {
+    tabs[j].addEventListener('click', function() {
+      window._beautifyActiveTab = this.getAttribute('data-tab');
+      renderBeautify();
+    });
+  }
+}
+
+function _fmtScalar(v) {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'boolean') return v ? '是' : '否';
+  if (typeof v === 'number') return String(v);
+  return String(v);
+}
+
+function _biCard(label, value) {
+  var num = parseFloat(value);
+  if (!isNaN(num) && num >= 0) {
+    return '<div class="beautify-info-card">' +
+      '<div class="beautify-info-label">' + escHtml(label) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;flex:1;">' +
+      '<div class="tv-stat-bar-bg" style="flex:1;"><div class="tv-stat-bar-fill" style="width:' + Math.min(num, _statMaxGuess(num)) / _statMaxGuess(num) * 100 + '%;background:' + _statColor(label) + '"></div></div>' +
+      '<span class="tv-stat-value">' + num + '</span></div></div>';
+  }
+  return '<div class="beautify-info-card"><div class="beautify-info-label">' + escHtml(label) + '</div><div class="beautify-info-value">' + escHtml(value) + '</div></div>';
+}
+
+function _bdItem(label, value) {
+  var num = parseFloat(value);
+  if (!isNaN(num) && num >= 0) {
+    return '<div class="beautify-detail-item"><div class="beautify-detail-label">' + escHtml(label) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;flex:1;max-width:200px;">' +
+      '<div class="tv-stat-bar-bg" style="flex:1;"><div class="tv-stat-bar-fill" style="width:' + Math.min(num, _statMaxGuess(num)) / _statMaxGuess(num) * 100 + '%;background:' + _statColor(label) + '"></div></div>' +
+      '<span class="tv-stat-value">' + num + '</span></div></div>';
+  }
+  var display = value || '—';
+  return '<div class="beautify-detail-item"><div class="beautify-detail-label">' + escHtml(label) + '</div><div class="beautify-detail-value">' + escHtml(display) + '</div></div>';
+}
+
+function _renderFlatObject(obj, indent) {
+  indent = indent || 0;
+  if (!obj || typeof obj !== 'object') return escHtml(String(obj));
+  var html = '';
+  var keys = Object.keys(obj);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var v = obj[k];
+    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+      // Nested object → collapsible details
+      var subKeys = Object.keys(v);
+      if (subKeys.length === 0) {
+        html += '<div class="data-row"><span class="k">' + escHtml(k) + '</span> <span style="color:var(--muted)">(empty)</span></div>';
+      } else {
+        html += '<details class="beautify-sub" style="padding-left:' + (indent * 6) + 'px;"><summary><b>' + escHtml(k) + '</b> <span style="color:var(--muted);font-size:10px">(' + subKeys.length + ' fields)</span></summary>';
+        html += _renderFlatObject(v, indent + 1);
+        html += '</details>';
+      }
+    } else if (Array.isArray(v)) {
+      html += '<div class="data-row"><span class="k">' + escHtml(k) + '</span> <span style="color:var(--muted)">[' + v.length + ' items]</span></div>';
+    } else if (typeof v === 'boolean') {
+      html += '<div class="data-row"><span class="k">' + escHtml(k) + '</span> <span style="color:' + (v ? '#7a9a5a' : '#9a7a5a') + '">' + (v ? '✓' : '✗') + '</span></div>';
+    } else if (typeof v === 'number') {
+      html += '<div class="data-row"><span class="k">' + escHtml(k) + '</span> <span class="beautify-highlight">' + v + '</span></div>';
+    } else if (typeof v === 'string') {
+      var display = escHtml(v);
+      var trunc = display.length > 20 ? display.substring(0, 20) + '…' : '';
+      html += '<div class="data-row"><span class="k">' + escHtml(k) + '</span> <span' + (trunc ? ' title="' + display + '"' : '') + '>' + (trunc || display) + '</span></div>';
+    }
+  }
+  return html;
+}
+
+// NPC portrait URLs — from card's .beautify.json (no hardcoded fallback)
+var BEAUTIFY_PORTRAITS = (window.BEAUTIFY_DATA && window.BEAUTIFY_DATA.portraits) || {};
+
+// Initialize random portrait indices
+(function() {
+  if (!window._beautifyPortraitIdx) {
+    window._beautifyPortraitIdx = {};
+    for (var k in BEAUTIFY_PORTRAITS) {
+      var normalPool = BEAUTIFY_PORTRAITS[k].normal;
+      if (normalPool && normalPool.length > 0) {
+        window._beautifyPortraitIdx[k] = Math.floor(Math.random() * normalPool.length);
+      }
+    }
+  }
+})();
+
+// renderBeautify defined above (generic, card-agnostic)
+
+function zoomPortrait(url) {
+  var modal = document.getElementById('beautify-modal');
+  var img = document.getElementById('beautify-modal-img');
+  if (!modal || !img || !url) return;
+  img.src = url;
+  modal.style.display = 'flex';
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// No page flash: use dynamic script reloading instead of meta refresh
+reloadData();
+checkBridge();
+loadSettings();
+loadOpenings();
+pollTimer = setInterval(reloadData, 3000);
+setInterval(checkBridge, 5000);
+setInterval(loadStyleProfiles, 15000);
+
+// ═══ Dark Mode Toggle ═══
+(function() {
+  var saved = localStorage.getItem('theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('theme-toggle').textContent = '☀️';
+  }
+  document.getElementById('theme-toggle').addEventListener('click', function() {
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+      document.documentElement.removeAttribute('data-theme');
+      this.textContent = '🌙';
+      localStorage.setItem('theme', 'light');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      this.textContent = '☀️';
+      localStorage.setItem('theme', 'dark');
+    }
+    // Re-check word count colors for current theme
+    if (typeof updateWordCount === 'function') updateWordCount();
+    if (typeof updateTokenCount === 'function') updateTokenCount();
+  });
+})();
+
+// ═══ Drag & Drop Card Import ═══
+(function() {
+  var overlay = document.createElement('div');
+  overlay.id = 'drop-overlay';
+  overlay.innerHTML = '<div class="drop-inner"><p>拖入角色卡 PNG 文件导入</p></div>';
+  overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;';
+  var inner = overlay.querySelector('.drop-inner');
+  inner.style.cssText = 'border:3px dashed #e94560;border-radius:16px;padding:60px;text-align:center;color:#fff;font-size:20px;';
+  document.body.appendChild(overlay);
+
+  var dragCount = 0;
+  document.addEventListener('dragenter', function(e) {
+    e.preventDefault();
+    dragCount++;
+    overlay.style.display = 'flex';
+  });
+  document.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    dragCount--;
+    if (dragCount <= 0) { overlay.style.display = 'none'; dragCount = 0; }
+  });
+  document.addEventListener('dragover', function(e) { e.preventDefault(); });
+  document.addEventListener('drop', function(e) {
+    e.preventDefault();
+    overlay.style.display = 'none';
+    dragCount = 0;
+    var files = e.dataTransfer.files;
+    if (!files.length) return;
+    var file = files[0];
+    if (!file.name.match(/\.(png|json)$/i)) {
+      toastr.error('仅支持 PNG 或 JSON 角色卡文件');
+      return;
+    }
+    var fd = new FormData();
+    fd.append('file', file);
+    toastr.info('正在导入: ' + file.name);
+    fetch('/api/import-card', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          toastr.success('角色卡已导入: ' + d.card_id);
+          setTimeout(function() { location.reload(); }, 1500);
+        } else {
+          toastr.error('导入失败: ' + (d.error || '未知错误'));
+        }
+      })
+      .catch(function(err) { toastr.error('导入请求失败: ' + err.message); });
+  });
+})();
+</script>
+</body>
+</html>

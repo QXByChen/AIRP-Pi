@@ -1,0 +1,13 @@
+{
+  "name": "airp-pi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AIRP RP Engine powered by Pi Coding Agent",
+  "scripts": {
+    "start": "python launcher.py",
+    "setup": "npm install && cd skills && npm install"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "latest"
+  }
+}

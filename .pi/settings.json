@@ -1,0 +1,19 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-reasoner",
+  "tools": ["read", "write", "edit", "bash", "grep", "glob"],
+  "contextFiles": ["CLAUDE.md", "STORY.md"],
+  "permissions": {
+    "bash": {
+      "allow": [
+        "python skills/*",
+        "python scripts/*",
+        "node skills/*",
+        "curl http://localhost:8765/*",
+        "curl http://localhost:8766/*",
+        "taskkill *",
+        "npm install"
+      ]
+    }
+  }
+}

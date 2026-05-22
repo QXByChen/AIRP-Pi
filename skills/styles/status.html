@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="3">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公文模拟器</title>
+<style>
+:root {
+  --bg: #0f0f1a;
+  --card: #1a1a2e;
+  --accent: #c0392b;
+  --text: #e0e0e0;
+  --muted: #888;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", "PingFang SC", sans-serif;
+  padding: 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.topbar {
+  width: 100%; max-width: 860px;
+  background: var(--card);
+  border: 1px solid #2a2a3e;
+  border-radius: 10px;
+  padding: 10px 18px;
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  font-size: 0.84em; align-items: center;
+}
+.topbar .tag { padding: 2px 10px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 0.78em; white-space: nowrap; }
+.topbar .dim { color: var(--muted); }
+.content-card {
+  width: 100%; max-width: 860px;
+  background: #fff; color: #000;
+  border: 1px solid #2a2a3e; border-radius: 10px; overflow: hidden;
+}
+.content-card .bar {
+  background: var(--card); padding: 8px 16px;
+  border-bottom: 1px solid #2a2a3e;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.85em;
+}
+.content-card .bar h3 { margin:0; color:var(--accent); }
+#doc { padding: 0; }
+#doc > * { margin: 0; }
+.summary-card {
+  width: 100%; max-width: 860px;
+  background: var(--card); border: 1px solid #2a2a3e; border-radius: 10px;
+  padding: 12px 18px; font-size: 0.84em; color: var(--muted);
+}
+.summary-card b { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<script src="content.js"></script>
+<script>
+const STATE = {
+  world: "公文模拟器系统 v1.0",
+  stage: "文件已签发 · 等待指令",
+  time: "合欢宗历 辛丑年 霜月 初七",
+  location: "合欢宗 · 戒律堂签发室",
+  env: "朱红大印落定，墨迹已干。执事将副本收入档案柜。",
+  quest: "合欢宗关于进一步规范女弟子行为要求的通知",
+  generatedCount: 1,
+  contentFile: "content.html"
+};
+// ═══════════════
+
+document.addEventListener("DOMContentLoaded", render);
+
+function render() {
+  document.title = `${STATE.world}`;
+
+  const contentHtml = window.CONTENT_HTML || '<div style="padding:40px;text-align:center;color:#999;">等待生成公文...</div>';
+  const summaryText = window.SUMMARY_TEXT || '';
+
+  document.body.innerHTML = `
+    <div class="topbar">
+      <span class="tag">${STATE.world}</span>
+      <span>${STATE.stage}</span>
+      <span class="dim">${STATE.time}</span>
+      <span class="dim">${STATE.location}</span>
+      <span class="dim" style="flex:1;text-align:right;">${STATE.env}</span>
+      <span style="font-size:0.78em;">已生成: ${STATE.generatedCount}</span>
+    </div>
+
+    <div class="content-card">
+      <div class="bar">
+        <h3>${STATE.quest}</h3>
+        <span class="dim">${STATE.time}</span>
+      </div>
+      <div id="doc">${contentHtml}</div>
+    </div>
+
+    <div class="summary-card">
+      <b>📋 摘要：</b>${summaryText || '暂无'}
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
