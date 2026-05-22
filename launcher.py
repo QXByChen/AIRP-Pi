@@ -81,6 +81,35 @@ def ensure_npm_deps():
         subprocess.run(["npm", "install", "--silent"], cwd=str(SKILLS_DIR), shell=True)
 
 
+def ensure_models_json():
+    """部署 Pi models.json 到用户目录（注册 DeepSeek 供应商）。"""
+    home = Path.home()
+    pi_agent_dir = home / ".pi" / "agent"
+    target = pi_agent_dir / "models.json"
+    source = ROOT / "models.json"
+
+    if not source.exists():
+        return
+
+    if target.exists():
+        try:
+            existing = json.loads(target.read_text(encoding="utf-8"))
+            if "deepseek" in existing.get("providers", {}):
+                return
+            # 合并：添加 deepseek provider
+            new_data = json.loads(source.read_text(encoding="utf-8"))
+            existing.setdefault("providers", {})["deepseek"] = new_data["providers"]["deepseek"]
+            target.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+            print("[launcher] models.json 已更新（添加 DeepSeek 供应商）")
+        except Exception:
+            pass
+    else:
+        pi_agent_dir.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy2(str(source), str(target))
+        print("[launcher] models.json 已部署到 ~/.pi/agent/")
+
+
 def find_pi_binary() -> str:
     """找到本地安装的 Pi 二进制路径。"""
     if sys.platform == "win32":
@@ -113,7 +142,7 @@ def launch_pi(config: dict):
         sys.exit(1)
 
     provider = config.get("provider", "deepseek")
-    model = config.get("model", "deepseek-reasoner")
+    model = config.get("model", "deepseek-v4-pro")
     api_key = config.get("api_key", "")
 
     env = os.environ.copy()
@@ -184,6 +213,7 @@ def main():
 
     # 2. 检查依赖
     ensure_npm_deps()
+    ensure_models_json()
 
     # 3. 确保角色卡目录存在
     CARDS_DIR.mkdir(parents=True, exist_ok=True)

@@ -125,7 +125,7 @@ round_deliver.py → 字数门禁 → handler.py 交付 → 记忆更新
 
 | Provider | 推荐模型 |
 |----------|----------|
-| DeepSeek | deepseek-reasoner |
+| DeepSeek | deepseek-v4-pro / deepseek-v4-flash |
 | Anthropic | claude-sonnet-4-6-20250514 |
 | OpenAI | gpt-4o |
 | OpenRouter | deepseek/deepseek-r1 |

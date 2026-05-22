@@ -100,7 +100,8 @@ select { cursor: pointer; }
 
   <div class="field">
     <label>Model</label>
-    <input type="text" id="model" value="deepseek-reasoner" placeholder="模型名称">
+    <input type="text" id="model" value="deepseek-v4-pro" placeholder="模型名称">
+    <small style="color:#888;font-size:11px;margin-top:4px;display:block;">DeepSeek 推荐: deepseek-v4-pro（强）或 deepseek-v4-flash（快/便宜）</small>
   </div>
 
   <div class="field">
@@ -119,7 +120,7 @@ select { cursor: pointer; }
 
 <script>
 const providerModels = {
-  deepseek: "deepseek-reasoner",
+  deepseek: "deepseek-v4-pro",
   anthropic: "claude-sonnet-4-6-20250514",
   openai: "gpt-4o",
   openrouter: "deepseek/deepseek-r1",

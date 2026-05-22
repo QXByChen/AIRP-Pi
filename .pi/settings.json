@@ -1,6 +1,6 @@
 {
   "provider": "deepseek",
-  "model": "deepseek-reasoner",
+  "model": "deepseek-v4-pro",
   "tools": ["read", "write", "edit", "bash", "grep", "glob"],
   "contextFiles": ["CLAUDE.md", "STORY.md"],
   "permissions": {
