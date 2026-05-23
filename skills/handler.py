@@ -12,6 +12,10 @@ import sys
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from diagnostics import get_logger
+log = get_logger("handler")
+
 from mvu_engine import extract_commands, execute_commands, compute_current_variables, audit_variables, validate_command, generate_schema, SchemaNode
 
 STYLES = Path(__file__).parent / "styles"

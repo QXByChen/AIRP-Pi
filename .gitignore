@@ -24,3 +24,6 @@ pi_stderr.txt
 skills/styles/generated/
 skills/styles/gallery.json
 .card_meta.json
+
+# Diagnostic logs (generated at runtime)
+skills/styles/.logs/

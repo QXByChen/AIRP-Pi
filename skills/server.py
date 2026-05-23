@@ -13,6 +13,8 @@ import sys
 import urllib.parse
 from pathlib import Path
 
+from diagnostics import setup_logging, get_logger
+
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 SKILLS = Path(__file__).parent
 PROJECT_ROOT = SKILLS.parent
@@ -30,6 +32,8 @@ SESSION_FILE = ROOT / ".session_init"
 sys.path.insert(0, str(SKILLS))
 import handler
 import card_store
+
+log = get_logger("server")
 
 DEFAULT_SETTINGS = {
     "style": "北棱特调",
@@ -179,8 +183,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 else:
                     self._json({"ok": False, "error": "no turns to reroll"}, 400)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                log.exception("Error in /api/reroll")
                 self._json({"ok": False, "error": str(e)}, 500)
 
         elif parsed.path == "/api/delete_turns":
@@ -306,8 +309,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._json({"ok": False, "error": "invalid json"}, 400)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                log.exception("Error in /api/init_session")
                 self._json({"ok": False, "error": str(e)}, 500)
 
         elif parsed.path == "/api/session_status":
@@ -527,8 +529,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 (ROOT / "state.js").write_text(state_content, encoding="utf-8")
                 self._json({"ok": True, "card_id": card_name, "path": str(card_dir), "world": world_name})
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                log.exception("Error in /api/import-card")
                 self._json({"ok": False, "error": str(e)}, 500)
 
         elif parsed.path == "/api/image-gen":
@@ -937,6 +938,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(img_path.read_bytes())
             return
 
+        # API: generate diagnostic bug report
+        if parsed.path == "/api/bug_report":
+            import bug_report
+            report = bug_report.generate_report()
+            bug_report.save_report(report)
+            self._json(report)
+            return
+
         # Default: serve static files
         super().do_GET()
 
@@ -957,12 +966,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, fmt, *args):
-        # Quieter logging
         if "POST" in fmt or "/api/" in fmt:
-            print(f"[server] {fmt % args}")
+            log.info(fmt % args)
 
 
 if __name__ == "__main__":
+    setup_logging()
+
     # --- Clean up stale mvu_server processes ---
     try:
         raw = subprocess.check_output(
@@ -973,7 +983,7 @@ if __name__ == "__main__":
         if out:
             for pid_str in out.split():
                 os.kill(int(pid_str), signal.SIGTERM)
-            print(f"[server] 清理残留 mvu_server 进程: {out}")
+            log.info(f"清理残留 mvu_server 进程: {out}")
     except Exception:
         pass
 
@@ -989,22 +999,21 @@ if __name__ == "__main__":
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=str(SKILLS)
             )
-            # Wait briefly to see if it starts
             import time
             time.sleep(1.5)
             if mvu_proc.poll() is not None:
                 stderr = _safe_decode(mvu_proc.stderr.read())
-                print(f"[server] mvu_server 启动失败: {stderr}")
+                log.error(f"mvu_server 启动失败: {stderr}")
                 mvu_proc = None
             else:
-                print(f"[server] mvu_server 已启动 (PID {mvu_proc.pid})")
+                log.info(f"mvu_server 已启动 (PID {mvu_proc.pid})")
         except FileNotFoundError:
-            print("[server] Node.js 未安装，跳过 mvu_server")
+            log.warning("Node.js 未安装，跳过 mvu_server")
         except Exception as e:
-            print(f"[server] mvu_server 启动异常: {e}")
+            log.error(f"mvu_server 启动异常: {e}")
             mvu_proc = None
     else:
-        print(f"[server] mvu_server.js 不存在: {mvu_script}")
+        log.warning(f"mvu_server.js 不存在: {mvu_script}")
 
     print(f"\n  RP Bridge Server")
     print(f"  Frontend → http://localhost:{PORT}")
@@ -1014,7 +1023,7 @@ if __name__ == "__main__":
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n[server] 正在关闭...")
+        log.info("正在关闭...")
     finally:
         if mvu_proc and mvu_proc.poll() is None:
             mvu_proc.terminate()
@@ -1022,6 +1031,6 @@ if __name__ == "__main__":
                 mvu_proc.wait(timeout=5)
             except Exception:
                 mvu_proc.kill()
-            print("[server] mvu_server 已停止")
+            log.info("mvu_server 已停止")
         server.shutdown()
-        print("[server] 已停止")
+        log.info("已停止")

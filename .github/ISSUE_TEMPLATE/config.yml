@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用问题 / 讨论
+    url: https://github.com/issues
+    about: 如果不确定是 Bug 还是使用问题，可以先在 Discussions 中讨论
