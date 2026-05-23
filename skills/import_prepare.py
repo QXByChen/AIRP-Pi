@@ -59,7 +59,7 @@ def cleanup_residual(styles_dir: Path) -> dict:
     try:
         result = subprocess.run(
             ["powershell", "-NoProfile", "-Command", cmd],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
         )
         if result.stdout.strip():
             pids = result.stdout.strip().split()

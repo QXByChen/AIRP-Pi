@@ -1023,6 +1023,87 @@ def audit_variables(prev_data: dict, new_data: dict, content_text: str = "") -> 
     }
 
 
+# ═══ JS Event Dispatch (调用 mvu_server.js 的 /dispatch 端点) ═══
+
+def dispatch_js_event(event_name: str, *args, port: int = 8766) -> Optional[dict]:
+    """
+    调用 mvu_server.js 派发事件到已注册的 JS 处理器。
+    处理器可能就地修改 args[0]（通常是 mvu_data），返回修改后的数据。
+    如果 mvu_server 未运行或无处理器，静默返回 None。
+    """
+    import urllib.request
+    payload = json.dumps({"event": event_name, "args": list(args)})
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/dispatch",
+        data=payload.encode('utf-8'),
+        headers={"Content-Type": "application/json"}
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=5)
+        result = json.loads(resp.read())
+        if result.get("ok") and result.get("modified_data"):
+            return result["modified_data"]
+        return None
+    except Exception:
+        return None
+
+
+def execute_commands_with_events(
+    stat_data: dict,
+    commands: list[Command],
+    message_text: str = "",
+    port: int = 8766
+) -> tuple[dict, dict]:
+    """
+    execute_commands 的增强版本，在变量更新前后派发 JS 事件。
+    事件处理器可修改命令列表和最终变量值。
+    """
+    mvu_data = {"stat_data": copy.deepcopy(stat_data), "initialized_lorebooks": {}}
+    mvu_data_before = copy.deepcopy(mvu_data)
+
+    # 1. VARIABLE_UPDATE_STARTED
+    dispatch_js_event("mag_variable_update_started", mvu_data, port=port)
+
+    # 2. COMMAND_PARSED — 处理器可修改 commands
+    cmd_dicts = [c.to_dict() for c in commands]
+    modified = dispatch_js_event(
+        "mag_command_parsed", mvu_data, cmd_dicts, message_text, port=port
+    )
+    # 如果处理器修改了命令列表，重建 Command 对象
+    if modified and isinstance(cmd_dicts, list):
+        rebuilt = []
+        for d in cmd_dicts:
+            if isinstance(d, dict) and "type" in d:
+                rebuilt.append(Command(
+                    type=d["type"],
+                    full_match=d.get("full_match", ""),
+                    args=d.get("args", []),
+                    reason=d.get("reason", "")
+                ))
+        if rebuilt:
+            commands = rebuilt
+
+    # 3. 执行命令
+    new_data, changes = execute_commands(stat_data, commands)
+
+    # 4. VARIABLE_UPDATE_ENDED — 处理器可修改最终变量
+    mvu_data_after = {"stat_data": new_data, "initialized_lorebooks": {}}
+    result = dispatch_js_event(
+        "mag_variable_update_ended", mvu_data_after, mvu_data_before, port=port
+    )
+    if result and "stat_data" in result:
+        new_data = result["stat_data"]
+
+    # 5. BEFORE_MESSAGE_UPDATE
+    dispatch_js_event(
+        "mag_before_message_update",
+        {"variables": {"stat_data": new_data, "initialized_lorebooks": {}}, "message_content": message_text},
+        port=port
+    )
+
+    return new_data, changes
+
+
 # ═══ Self-test ═══
 
 if __name__ == "__main__":

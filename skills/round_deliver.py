@@ -183,7 +183,7 @@ def main():
                 "word_count": {"current": chinese_count, "target": word_count_target, "ratio": round(ratio, 2)},
                 "tokens": token_data,
                 "banned_violations": [{"text": v[0], "category": v[1]} for v in violations],
-                "hint": f"禁用词/句式命中: {violation_list}。请替换这些表达后重新生成。参考 constraints.md 替换规则。"
+                "hint": f"禁用词/句式命中: {violation_list}。请先调用 check_bagu.py 获取精确位置后定点修复，而非全文重写。"
             }, ensure_ascii=False))
             sys.exit(0)
 
@@ -199,7 +199,7 @@ def main():
     try:
         result = subprocess.run(
             [sys.executable, str(Path(root) / "skills" / "handler.py"), card_folder],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
         )
         handler_ok = result.returncode == 0
         handler_output = result.stdout.strip()
@@ -222,7 +222,7 @@ def main():
     try:
         result = subprocess.run(
             [sys.executable, str(Path(root) / "skills" / "write_memory.py"), card_folder],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15
         )
         memory_ok = result.returncode == 0
     except Exception:

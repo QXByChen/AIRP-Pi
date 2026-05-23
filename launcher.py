@@ -42,7 +42,7 @@ def wait_for_server(timeout=15) -> bool:
         try:
             result = subprocess.run(
                 ["curl", "-s", "--max-time", "2", f"http://localhost:{SERVER_PORT}/api/pending"],
-                capture_output=True, text=True, timeout=3
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=3
             )
             if result.returncode == 0 and result.stdout.strip():
                 json.loads(result.stdout)
@@ -124,7 +124,7 @@ def find_pi_binary() -> str:
     try:
         result = subprocess.run(
             ["where" if sys.platform == "win32" else "which", "pi"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip().split("\n")[0]
@@ -212,7 +212,7 @@ def main():
     try:
         result = subprocess.run(
             ["curl", "-s", "--max-time", "2", f"http://localhost:{SERVER_PORT}/api/pending"],
-            capture_output=True, text=True, timeout=3
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=3
         )
         server_running = result.returncode == 0 and result.stdout.strip()
     except Exception:

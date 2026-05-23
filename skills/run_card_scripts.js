@@ -53,77 +53,15 @@ const output = {
 };
 
 // ============================================================
-// 构建沙箱全局变量
+// 构建沙箱全局变量（使用 tavern_compat 兼容层）
 // ============================================================
+const { createSandbox } = require('./tavern_compat.js');
+const { sandbox, getState } = createSandbox({ mode: 'extract', statData: {} });
 
-// --- mock registerMvuSchema: 捕获并合并所有 Zod schema ---
-const capturedSchemas = [];
-let capturedSchema = null;  // 向后兼容：保留最后一个
-function registerMvuSchema(schema) {
-  capturedSchemas.push(schema);
-  capturedSchema = schema;
-}
-
-// --- mock injectPrompts: 捕获注入调用 ---
-function injectPrompts(prompts, opts) {
-  for (const p of prompts || []) {
-    output.injections.push({
-      id: p.id || '',
-      position: p.position || 'none',
-      depth: typeof p.depth === 'number' ? p.depth : 0,
-      role: p.role || 'system',
-      content: p.content || '',
-      should_scan: !!p.should_scan,
-      once: opts?.once || false,
-    });
-  }
-  return { uninject: () => {} };
-}
-
-// --- mock eventOn: 记录事件 ---
-const eventsRegistered = [];
-function eventOn(eventName, callback) {
-  eventsRegistered.push(eventName);
-}
-
-// --- mock Mvu: 返回空变量（导入时无运行时状态） ---
-const Mvu = {
-  events: {
-    VARIABLE_UPDATE_ENDED: 'VARIABLE_UPDATE_ENDED',
-  },
-  getMvuData: function (opts) {
-    // 导入阶段没有运行时变量，返回包含空 stat_data 的结构
-    return { stat_data: {} };
-  },
-};
-
-// --- mock waitGlobalInitialized: 立即 resolve ---
-function waitGlobalInitialized(name) {
-  return Promise.resolve();
-}
-
-// --- mock setTimeout (来自全局，但在 vm 中需要显式传入) ---
-// 使用宿主 setTimeout
-
-// --- mock $: DOM ready → 立即执行 ---
-let $Callbacks = [];
-function $(fn) {
-  if (typeof fn === 'function') {
-    $Callbacks.push(fn);
-  }
-}
-
-// --- 模拟 tavern_events 全局对象 ---
-const tavern_events = {
-  CHAT_CHANGED: 'CHAT_CHANGED',
-  GENERATION_AFTER_COMMANDS: 'GENERATION_AFTER_COMMANDS',
-  MESSAGE_RECEIVED: 'MESSAGE_RECEIVED',
-  GENERATION_ENDED: 'GENERATION_ENDED',
-  APP_READY: 'APP_READY',
-  GENERATION_STARTED: 'GENERATION_STARTED',
-  STREAM_TOKEN_RECEIVED_FULLY: 'STREAM_TOKEN_RECEIVED_FULLY',
-  STREAM_TOKEN_RECEIVED_INCREMENTALLY: 'STREAM_TOKEN_RECEIVED_INCREMENTALLY',
-};
+// 从兼容层获取内部状态引用
+const state = getState();
+const capturedSchemas = state.capturedSchemas;
+const $Callbacks = state.$Callbacks;
 
 // ============================================================
 // 预处理脚本内容
@@ -141,12 +79,9 @@ function preprocessScript(content) {
   processed = processed.replace(/\bexport\s+(const|let|var|function|class|async\s+function)\b/g, '$1');
 
   // const Schema / const Variable / const schema → var（避免跨脚本重复声明）
-  // 多个 tavern_helper 脚本各自声明同名的 const Schema / const Variable
-  // 必须用 var（不是 let），因为 VM 中所有脚本共享全局作用域，let 不允许重复声明
   processed = processed.replace(/\bconst\s+(Schema|Variable|schema|variable)\b/g, 'var $1');
 
   // $() → 直接执行：$(() => { registerMvuSchema(Schema) }) → registerMvuSchema(Schema);
-  // 必须在脚本内直接调用（而非延迟回调），否则 var Schema 会被后续脚本覆盖
   processed = processed.replace(
     /\$\(\(\)\s*=>\s*\{\s*registerMvuSchema\(([^)]+)\);?\s*\}\);?/g,
     'registerMvuSchema($1);'
@@ -158,57 +93,6 @@ function preprocessScript(content) {
 // ============================================================
 // 执行脚本
 // ============================================================
-const sandbox = {
-  // 真实 Zod 库
-  z,
-  // mock 函数
-  registerMvuSchema,
-  injectPrompts,
-  eventOn,
-  Mvu,
-  waitGlobalInitialized,
-  $,
-  // 工具库
-  _,
-  // tavern events
-  tavern_events,
-  // 标准全局
-  console: {
-    log: (...args) => { /* 静默 */ },
-    error: (...args) => { /* 静默 */ },
-    warn: (...args) => { /* 静默 */ },
-    info: (...args) => { /* 静默 */ },
-    debug: (...args) => { /* 静默 */ },
-  },
-  setTimeout: setTimeout,
-  clearTimeout: clearTimeout,
-  setInterval: () => { /* noop */ },
-  clearInterval: () => { /* noop */ },
-  Promise: Promise,
-  JSON: JSON,
-  Object: Object,
-  Array: Array,
-  String: String,
-  Number: Number,
-  Boolean: Boolean,
-  Math: Math,
-  Date: Date,
-  RegExp: RegExp,
-  Error: Error,
-  Map: Map,
-  Set: Set,
-  parseInt: parseInt,
-  parseFloat: parseFloat,
-  isNaN: isNaN,
-  isFinite: isFinite,
-  undefined: undefined,
-  null: null,
-  true: true,
-  false: false,
-  NaN: NaN,
-  Infinity: Infinity,
-};
-
 const vmContext = vm.createContext(sandbox);
 
 // 执行所有启用的脚本（名称无关，按内容特征分类执行）
@@ -539,7 +423,7 @@ function extractConstraints(schema, prefix, result) {
 // ============================================================
 // 组装输出: 合并所有捕获的 schema
 // ============================================================
-let mergedSchema = capturedSchema;
+let mergedSchema = state.capturedSchema;
 if (capturedSchemas.length > 1) {
   // 多个 schema：合并为单一的顶层 ZodObject
   try {
@@ -576,6 +460,7 @@ const initvar = generateInitvar(mergedSchema);
 output.schema = schemaInfo;
 output.initvar = initvar;
 output.scope = generateScopeMeta(initvar);
+output.injections = state.injections;
 output.injections = extractInjectionRulesFromScripts(output.injections, scripts);
 
 // 如果 initvar 为空但有 injection 数据，尝试从 schema 手动构建

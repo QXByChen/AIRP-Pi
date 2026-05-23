@@ -1,9 +1,9 @@
 {
-  "style": "北棱特调",
+  "style": "轻松活泼",
   "nsfw": "直白",
   "person": "第三人称",
   "antiImpersonation": true,
   "bgNpc": false,
-  "charName": "",
+  "charName": "我",
   "wordCount": 2000
 }

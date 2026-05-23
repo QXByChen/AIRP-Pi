@@ -1,0 +1,106 @@
+{
+  "enabled": true,
+  "auto_trigger": true,
+  "active_backend": "novelai",
+  "llm_optimize": {
+    "enabled": false,
+    "api_url": "",
+    "api_key": "",
+    "model": "",
+    "temperature": 0.7,
+    "max_tokens": 200,
+    "system_prompt": ""
+  },
+  "backends": {
+    "sd": {
+      "url": "http://127.0.0.1:7860",
+      "auth": "",
+      "model": "",
+      "vae": "",
+      "sampler": "Euler a",
+      "scheduler": "Automatic",
+      "width": 832,
+      "height": 1216,
+      "steps": 28,
+      "cfg_scale": 7,
+      "clip_skip": 1,
+      "seed": -1,
+      "hires_fix": false,
+      "hires_upscaler": "Latent",
+      "hires_scale": 1.5,
+      "hires_denoising": 0.55,
+      "hires_steps": 10,
+      "restore_faces": false
+    },
+    "novelai": {
+      "api_key": "",
+      "site": "official",
+      "other_site_url": "",
+      "model": "nai-diffusion-4-5-curated",
+      "sampler": "k_euler_ancestral",
+      "schedule": "karras",
+      "scale": 5,
+      "cfg_rescale": 0,
+      "smea": false,
+      "smea_dyn": false,
+      "width": 832,
+      "height": 1216,
+      "steps": 28,
+      "seed": 0
+    },
+    "comfyui": {
+      "url": "http://127.0.0.1:8188",
+      "workflow_json": null,
+      "model": "",
+      "sampler": "",
+      "scheduler": "",
+      "vae": "",
+      "width": 832,
+      "height": 1216,
+      "steps": 28,
+      "cfg": 7,
+      "seed": -1
+    },
+    "banana": {
+      "api_url": "",
+      "api_key": "",
+      "model": "",
+      "aspect_ratio": "9:16",
+      "use_grok_format": false
+    }
+  },
+  "prompts": {
+    "quality_positive": "best quality, amazing quality, very aesthetic, absurdres",
+    "quality_negative": "lowres, bad anatomy, bad hands, worst quality, low quality",
+    "fixed_positive": "",
+    "fixed_positive_end": "",
+    "fixed_negative": "",
+    "replacement_rules": []
+  },
+  "fab": {
+    "enabled": true,
+    "video_mode": false,
+    "desktop_pet": false,
+    "bg_color": "#5b8a5b",
+    "icon_color": "#ffffff",
+    "opacity": 1.0,
+    "size": 50,
+    "position": {
+      "top": "65vh",
+      "left": "20px"
+    }
+  },
+  "characters": [],
+  "imagegen_worldbook": {
+    "enabled": true,
+    "books_dir": "imagegen_worldbooks",
+    "bindings": {
+      "_default": [
+        "文生图世界书.json"
+      ],
+      "巨根症患者的世界": [
+        "文生图世界书.json"
+      ]
+    }
+  }
+}

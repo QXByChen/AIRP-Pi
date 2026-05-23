@@ -218,6 +218,43 @@ body {
 .btn-submit:hover { background: #4a6a4a; }
 .btn-secondary { background: var(--border); color: var(--text); }
 .btn-secondary:hover { background: #c4b9a0; }
+.btn-sm { background: var(--accent); color: #fff; border: none; border-radius: 4px; padding: 4px 12px; font-size: 0.75em; cursor: pointer; font-family: var(--font-ui); }
+.btn-sm:hover { opacity: 0.85; }
+.btn-sm.active { background: var(--accent2); }
+.imggen-tab { margin-bottom: 2px; }
+#imggen-fab {
+  position: fixed; top: 65vh; left: 20px;
+  width: 50px; height: 50px; border-radius: 50%;
+  background-color: var(--accent); display: flex;
+  justify-content: center; align-items: center;
+  cursor: grab; z-index: 1000;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  transition: width 0.3s, height 0.3s, border-radius 0.3s, box-shadow 0.3s, opacity 0.3s;
+  touch-action: none; will-change: transform; transform: translateZ(0);
+  backface-visibility: hidden;
+}
+#imggen-fab.fab-video-mode { border-radius: 0; box-shadow: none; pointer-events: none; }
+#imggen-fab.fab-video-mode .fab-icon { display: none; }
+#imggen-fab .fab-icon { font-size: 20px; z-index: 1; user-select: none; pointer-events: none; }
+#imggen-fab:active { cursor: grabbing; }
+#imggen-fab.fab-dragging { transition: none; }
+#imggen-fab.fab-loading .fab-icon { display: none; }
+#imggen-fab.fab-loading .fab-video { display: none !important; }
+#imggen-fab.fab-loading::after {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%); width: 24px; height: 24px;
+  border: 3px solid rgba(255,255,255,0.3); border-top-color: white;
+  border-radius: 50%; animation: fab-spin 0.8s linear infinite; z-index: 3;
+}
+@keyframes fab-spin { from{transform:translate(-50%,-50%) rotate(0deg)} to{transform:translate(-50%,-50%) rotate(360deg)} }
+.fab-video { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:2; user-select:none; }
+#imggen-fab-prompt-popup {
+  position: fixed; bottom: 80px; left: 20px; z-index: 1001;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: none; width: 280px;
+}
+#imggen-fab-prompt-popup input { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--input-bg); color: var(--text); font-size: 0.85em; }
+#imggen-fab-prompt-popup .fab-popup-btns { margin-top: 8px; display: flex; gap: 6px; justify-content: flex-end; }
 .btn-reroll {
   font-size: 0.85em; padding: 1px 6px; border: 1px solid var(--border);
   border-radius: 4px; background: var(--bg); cursor: pointer;
@@ -809,7 +846,8 @@ body {
   <span class="sep">|</span>
   <span class="dim" id="tb-location">—</span>
   <span class="sep">|</span>
-  <select id="card-select" onchange="switchCard(this.value)" title="切换角色卡" style="background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:0.75em;font-family:var(--font-ui);max-width:140px;cursor:pointer;"></select>
+  <select id="card-select" onchange="switchCard(this.value)" title="切换角色卡" style="background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:0.75em;font-family:var(--font-ui);max-width:160px;cursor:pointer;"></select>
+  <button onclick="toggleFav()" id="fav-btn" title="收藏/取消收藏" style="background:none;border:none;cursor:pointer;font-size:0.9em;padding:0 2px;line-height:1;">☆</button>
   <span class="spacer"></span>
   <span class="dim" style="font-size:0.75em;" id="conn-label">桥接:</span>
   <span id="conn-dot" class="dot red" title="服务器未连接"></span>
@@ -879,6 +917,11 @@ body {
       <h4>📊 状态面板</h4>
       <div id="sb-beautify"></div>
     </div>
+    <div class="side-card" id="imggen-card">
+      <h4>🎨 生图 <button class="btn-sm" style="float:right;font-size:0.7em;padding:2px 8px;" onclick="openImggenSettings()">设置</button></h4>
+      <div id="sb-imggen-latest" style="text-align:center;color:var(--muted);font-size:0.8em;">暂无生成图片</div>
+      <div id="sb-imggen-status" style="display:none;font-size:0.75em;color:var(--accent2);margin-top:4px;"></div>
+    </div>
     <div class="side-card" id="mvu-card" style="display:none;">
       <h4>🗃️ 变量</h4>
       <div id="sb-mvu-vars"></div>
@@ -893,16 +936,44 @@ body {
       </select>
     </div>
     <div class="side-card" id="card-edit-card">
-      <h4>🎭 角色卡编辑</h4>
-      <div class="setting-row"><span class="label">名称</span><input id="ce-name" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);"></div>
-      <div class="setting-row"><span class="label">标签</span><input id="ce-tags" placeholder="逗号分隔" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);"></div>
-      <div class="setting-row"><span class="label">描述</span><textarea id="ce-description" rows="3" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
-      <div class="setting-row"><span class="label">性格</span><textarea id="ce-personality" rows="2" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
-      <div class="setting-row"><span class="label">场景</span><textarea id="ce-scenario" rows="2" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button onclick="saveCardFields()" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:0.75em;cursor:pointer;">保存修改</button>
-        <button onclick="deleteCurrentCard()" style="padding:4px 8px;border-radius:4px;border:1px solid #c0392b;background:transparent;color:#c0392b;font-size:0.75em;cursor:pointer;">删除</button>
+      <h4>🎭 角色卡管理</h4>
+      <!-- Search & Filter -->
+      <div style="display:flex;gap:4px;margin-bottom:6px;">
+        <input id="card-search" placeholder="搜索..." oninput="loadCards()" style="flex:1;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.75em;font-family:var(--font-ui);">
+        <select id="card-sort" onchange="loadCards()" style="padding:3px 4px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.72em;font-family:var(--font-ui);">
+          <option value="name">名称</option>
+          <option value="recent">最近使用</option>
+          <option value="messages">对话数</option>
+          <option value="fav">收藏优先</option>
+        </select>
       </div>
+      <div id="card-tag-filter" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px;font-size:0.7em;"></div>
+      <!-- Card List (grid with avatars) -->
+      <div id="card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:6px;margin-bottom:8px;max-height:180px;overflow-y:auto;"></div>
+      <!-- Edit Fields -->
+      <details id="card-edit-details">
+        <summary style="cursor:pointer;font-size:0.78em;color:var(--muted);margin-bottom:4px;">编辑字段</summary>
+        <div class="setting-row"><span class="label">名称</span><input id="ce-name" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);"></div>
+        <div class="setting-row"><span class="label">标签</span><input id="ce-tags" placeholder="逗号分隔" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);"></div>
+        <div class="setting-row"><span class="label">描述</span><textarea id="ce-description" rows="3" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+        <div class="setting-row"><span class="label">性格</span><textarea id="ce-personality" rows="2" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+        <div class="setting-row"><span class="label">场景</span><textarea id="ce-scenario" rows="2" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+        <div class="setting-row"><span class="label">开场白</span><textarea id="ce-first-mes" rows="3" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+        <div class="setting-row"><span class="label">备选开场</span><textarea id="ce-alt-greetings" rows="2" placeholder="用 --- 分隔多个开场白" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+        <div class="setting-row"><span class="label">作者备注</span><textarea id="ce-creator-notes" rows="2" style="width:100%;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.78em;font-family:var(--font-ui);resize:vertical;"></textarea></div>
+      </details>
+      <!-- Action Buttons -->
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+        <button onclick="saveCardFields()" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:0.72em;cursor:pointer;">保存</button>
+        <button onclick="duplicateCard()" title="复制角色卡" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:0.72em;cursor:pointer;">复制</button>
+        <button onclick="exportCard()" title="导出JSON" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:0.72em;cursor:pointer;">导出</button>
+        <button onclick="deleteCurrentCard()" style="padding:4px 8px;border-radius:4px;border:1px solid #c0392b;background:transparent;color:#c0392b;font-size:0.72em;cursor:pointer;">删除</button>
+      </div>
+      <!-- Trash -->
+      <details id="trash-details" style="margin-top:6px;">
+        <summary onclick="loadTrash()" style="cursor:pointer;font-size:0.72em;color:var(--muted);">回收站</summary>
+        <div id="trash-list" style="max-height:120px;overflow-y:auto;font-size:0.72em;"></div>
+      </details>
     </div>
     <div class="side-card">
       <h4>📋 剧情摘要</h4>
@@ -937,7 +1008,52 @@ body {
   <img id="beautify-modal-img" src="" alt="立绘放大" style="max-width:95%;max-height:95vh;border:2px solid #8b6b4a;box-shadow:0 0 20px #000;border-radius:4px;object-fit:contain;">
 </div>
 
-<script src="_st_shims.js?v=2"></script>
+<!-- Image generation lightbox -->
+<div id="imggen-lightbox" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.9);z-index:10000;justify-content:center;align-items:center;cursor:zoom-out;" onclick="this.style.display='none'">
+  <img id="imggen-lightbox-img" src="" alt="生成图片" style="max-width:95%;max-height:95vh;border:2px solid var(--accent);box-shadow:0 0 30px #000;border-radius:6px;object-fit:contain;">
+</div>
+
+<!-- Image generation settings modal -->
+<div id="imggen-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);z-index:9998;justify-content:center;align-items:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;width:90%;max-width:700px;max-height:85vh;overflow-y:auto;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+    <h3 style="margin:0 0 16px;color:var(--accent);">🎨 生图设置</h3>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;" id="imggen-tabs">
+      <button class="btn-sm imggen-tab active" data-tab="main" onclick="switchImggenTab('main')">主要</button>
+      <button class="btn-sm imggen-tab" data-tab="sd" onclick="switchImggenTab('sd')">SD WebUI</button>
+      <button class="btn-sm imggen-tab" data-tab="novelai" onclick="switchImggenTab('novelai')">NovelAI</button>
+      <button class="btn-sm imggen-tab" data-tab="comfyui" onclick="switchImggenTab('comfyui')">ComfyUI</button>
+      <button class="btn-sm imggen-tab" data-tab="banana" onclick="switchImggenTab('banana')">Banana</button>
+      <button class="btn-sm imggen-tab" data-tab="llm" onclick="switchImggenTab('llm')">LLM优化</button>
+      <button class="btn-sm imggen-tab" data-tab="chars" onclick="switchImggenTab('chars')">角色</button>
+      <button class="btn-sm imggen-tab" data-tab="gallery" onclick="switchImggenTab('gallery')">画廊</button>
+      <button class="btn-sm imggen-tab" data-tab="worldbook" onclick="switchImggenTab('worldbook')">世界书</button>
+      <button class="btn-sm imggen-tab" data-tab="fab" onclick="switchImggenTab('fab')">悬浮球</button>
+    </div>
+    <div id="imggen-tab-content"></div>
+    <div style="text-align:right;margin-top:16px;">
+      <button class="btn-sm" onclick="saveImggenSettings()">保存</button>
+      <button class="btn-sm" onclick="document.getElementById('imggen-modal').style.display='none'">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- FAB (Floating Action Button) for image generation -->
+<div id="imggen-fab">
+  <span class="fab-icon">🎨</span>
+  <canvas class="fab-video" style="display:none;"></canvas>
+</div>
+
+<!-- FAB quick prompt popup -->
+<div id="imggen-fab-prompt-popup">
+  <div style="font-size:0.8em;color:var(--muted);margin-bottom:6px;">快速生图 — 输入提示词</div>
+  <input type="text" id="fab-prompt-input" placeholder="1girl, school uniform, ..." onkeydown="if(event.key==='Enter')fabQuickGenerate()">
+  <div class="fab-popup-btns">
+    <button class="btn-sm" onclick="fabQuickGenerate()">生成</button>
+    <button class="btn-sm" onclick="closeFabPrompt()">取消</button>
+  </div>
+</div>
+
+<script src="_st_shims.js?v=3"></script>
 <script>
 // ═══ Dynamic script reloader (no page flash) ═══
 console.log('[RP-Frontend] Initialized. jQuery:', typeof jQuery, 'lodash:', typeof window._, 'toastr:', typeof toastr);
@@ -2020,23 +2136,86 @@ function escHtml(s) {
 
 // ═══ Card Management ═══
 var _currentCardId = '';
+var _allTags = [];
+var _currentFav = false;
 
 function loadCards() {
-  fetch('/api/cards').then(r => r.json()).then(d => {
+  var search = (document.getElementById('card-search') || {}).value || '';
+  var sort = (document.getElementById('card-sort') || {}).value || 'name';
+  var tag = (document.getElementById('card-tag-active') || {}).value || '';
+  var url = '/api/cards?sort=' + encodeURIComponent(sort) + '&search=' + encodeURIComponent(search) + '&tag=' + encodeURIComponent(tag);
+  fetch(url).then(r => r.json()).then(d => {
     if (!d.ok) return;
+    // Update topbar select
     var sel = document.getElementById('card-select');
     var prev = sel.value;
     sel.innerHTML = '';
     (d.cards || []).forEach(function(c) {
       var opt = document.createElement('option');
       opt.value = c.id;
-      opt.textContent = (c.name || c.id) + (c.messages ? ' (' + c.messages + '轮)' : '');
+      opt.textContent = (c.fav ? '★ ' : '') + (c.name || c.id) + (c.messages ? ' (' + c.messages + '轮)' : '');
       if (c.active) opt.selected = true;
       sel.appendChild(opt);
     });
     _currentCardId = d.current || sel.value;
+    // Update card grid
+    renderCardGrid(d.cards || []);
+    // Update tag filter chips
+    if (d.tags) {
+      _allTags = d.tags;
+      renderTagFilter(d.tags);
+    }
     loadCardFields();
   }).catch(function() {});
+}
+
+function renderCardGrid(cards) {
+  var grid = document.getElementById('card-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  cards.forEach(function(c) {
+    var cell = document.createElement('div');
+    cell.style.cssText = 'cursor:pointer;border-radius:6px;border:2px solid ' + (c.active ? 'var(--accent)' : 'transparent') + ';overflow:hidden;position:relative;aspect-ratio:2/3;background:var(--input-bg);display:flex;align-items:center;justify-content:center;';
+    cell.title = (c.name || c.id) + (c.messages ? ' (' + c.messages + '轮)' : '');
+    cell.onclick = (function(id) { return function() { switchCard(id); }; })(c.id);
+    if (c.avatar) {
+      var img = document.createElement('img');
+      img.src = '/api/image?path=' + encodeURIComponent(c.avatar);
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+      img.loading = 'lazy';
+      cell.appendChild(img);
+    } else {
+      var txt = document.createElement('span');
+      txt.textContent = (c.name || c.id).slice(0, 2);
+      txt.style.cssText = 'font-size:0.9em;color:var(--muted);';
+      cell.appendChild(txt);
+    }
+    if (c.fav) {
+      var star = document.createElement('span');
+      star.textContent = '★';
+      star.style.cssText = 'position:absolute;top:1px;right:2px;font-size:0.7em;color:#f1c40f;text-shadow:0 0 2px #000;';
+      cell.appendChild(star);
+    }
+    grid.appendChild(cell);
+  });
+}
+
+function renderTagFilter(tags) {
+  var container = document.getElementById('card-tag-filter');
+  if (!container) return;
+  var activeTag = (document.getElementById('card-tag-active') || {}).value || '';
+  container.innerHTML = '<input type="hidden" id="card-tag-active" value="' + activeTag + '">';
+  tags.forEach(function(t) {
+    var chip = document.createElement('span');
+    chip.textContent = t;
+    chip.style.cssText = 'padding:1px 5px;border-radius:3px;cursor:pointer;border:1px solid var(--border);' + (t === activeTag ? 'background:var(--accent);color:#fff;' : 'background:var(--input-bg);color:var(--muted);');
+    chip.onclick = function() {
+      var hidden = document.getElementById('card-tag-active');
+      hidden.value = (hidden.value === t) ? '' : t;
+      loadCards();
+    };
+    container.appendChild(chip);
+  });
 }
 
 function switchCard(cardId) {
@@ -2049,6 +2228,7 @@ function switchCard(cardId) {
         _currentCardId = d.current || cardId;
         toastr.success('已切换: ' + (d.card && d.card.fields && d.card.fields.name || cardId));
         reloadData();
+        loadOpenings();
         loadCards();
       } else {
         toastr.error('切换失败: ' + (d.error || ''));
@@ -2065,6 +2245,13 @@ function loadCardFields() {
     document.getElementById('ce-description').value = f.description || '';
     document.getElementById('ce-personality').value = f.personality || '';
     document.getElementById('ce-scenario').value = f.scenario || '';
+    document.getElementById('ce-first-mes').value = f.first_mes || '';
+    document.getElementById('ce-alt-greetings').value = Array.isArray(f.alternate_greetings) ? f.alternate_greetings.join('\n---\n') : '';
+    document.getElementById('ce-creator-notes').value = f.creator_notes || '';
+    // Update fav button
+    _currentFav = d.card.fav || false;
+    document.getElementById('fav-btn').textContent = _currentFav ? '★' : '☆';
+    document.getElementById('fav-btn').style.color = _currentFav ? '#f1c40f' : 'var(--muted)';
   }).catch(function() {});
 }
 
@@ -2074,7 +2261,10 @@ function saveCardFields() {
     tags: document.getElementById('ce-tags').value,
     description: document.getElementById('ce-description').value,
     personality: document.getElementById('ce-personality').value,
-    scenario: document.getElementById('ce-scenario').value
+    scenario: document.getElementById('ce-scenario').value,
+    first_mes: document.getElementById('ce-first-mes').value,
+    alternate_greetings: document.getElementById('ce-alt-greetings').value,
+    creator_notes: document.getElementById('ce-creator-notes').value
   };
   fetch('/api/card/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: _currentCardId, fields: fields})})
     .then(r => r.json())
@@ -2104,6 +2294,83 @@ function deleteCurrentCard() {
         toastr.error('删除失败: ' + (d.error || ''));
       }
     }).catch(e => toastr.error('删除请求失败'));
+}
+
+function duplicateCard() {
+  if (!_currentCardId) return;
+  fetch('/api/card/duplicate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({card: _currentCardId})})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        toastr.success('已复制: ' + d.new_card);
+        loadCards();
+      } else {
+        toastr.error('复制失败: ' + (d.error || ''));
+      }
+    }).catch(e => toastr.error('复制请求失败'));
+}
+
+function exportCard() {
+  if (!_currentCardId) return;
+  fetch('/api/card/export', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({card: _currentCardId})})
+    .then(r => {
+      if (!r.ok) throw new Error('export failed');
+      return r.blob();
+    })
+    .then(blob => {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = _currentCardId + '.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toastr.success('已导出');
+    }).catch(e => toastr.error('导出失败'));
+}
+
+function toggleFav() {
+  if (!_currentCardId) return;
+  fetch('/api/card/fav', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({card: _currentCardId})})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        _currentFav = d.fav;
+        document.getElementById('fav-btn').textContent = d.fav ? '★' : '☆';
+        document.getElementById('fav-btn').style.color = d.fav ? '#f1c40f' : 'var(--muted)';
+        loadCards();
+      }
+    }).catch(function() {});
+}
+
+function loadTrash() {
+  fetch('/api/trash').then(r => r.json()).then(d => {
+    if (!d.ok) return;
+    var list = document.getElementById('trash-list');
+    if (!d.items || !d.items.length) {
+      list.innerHTML = '<div style="color:var(--muted);padding:4px;">回收站为空</div>';
+      return;
+    }
+    list.innerHTML = '';
+    d.items.forEach(function(item) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px solid var(--border);';
+      row.innerHTML = '<span>' + (item.display_name || item.original_name) + '</span><button onclick="restoreCard(\'' + item.id.replace(/'/g, "\\'") + '\')" style="padding:1px 6px;border-radius:3px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:0.7em;cursor:pointer;">恢复</button>';
+      list.appendChild(row);
+    });
+  }).catch(function() {});
+}
+
+function restoreCard(trashId) {
+  fetch('/api/trash/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: trashId})})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        toastr.success('已恢复: ' + d.restored);
+        loadCards();
+        loadTrash();
+      } else {
+        toastr.error('恢复失败: ' + (d.error || ''));
+      }
+    }).catch(e => toastr.error('恢复请求失败'));
 }
 
 // No page flash: use dynamic script reloading instead of meta refresh
@@ -2196,6 +2463,453 @@ fetch('/api/config').then(r => r.json()).then(d => {
       })
       .catch(function(err) { toastr.error('导入请求失败: ' + err.message); });
   });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// Image Generation Frontend
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  var _imggenSettings = null;
+  var _imggenPollTimer = null;
+  var _pendingTasks = [];
+
+  window.openImggenSettings = function() {
+    document.getElementById('imggen-modal').style.display = 'flex';
+    loadImggenSettings();
+  };
+
+  function loadImggenSettings() {
+    fetch('/api/imagegen/settings').then(function(r){return r.json()}).then(function(d) {
+      if (d.ok) { _imggenSettings = d.settings; renderImggenTab('main'); }
+    });
+  }
+
+  window.switchImggenTab = function(tab) {
+    document.querySelectorAll('.imggen-tab').forEach(function(b){b.classList.remove('active')});
+    document.querySelector('.imggen-tab[data-tab="'+tab+'"]').classList.add('active');
+    renderImggenTab(tab);
+  };
+
+  function renderImggenTab(tab) {
+    var el = document.getElementById('imggen-tab-content');
+    if (!_imggenSettings) { el.innerHTML = '加载中...'; return; }
+    var s = _imggenSettings;
+    var h = '';
+    if (tab === 'main') {
+      h = '<div class="setting-row"><span class="label">启用生图</span><label class="toggle-switch"><input type="checkbox" id="ig-enabled" '+(s.enabled?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<div class="setting-row"><span class="label">自动触发</span><label class="toggle-switch"><input type="checkbox" id="ig-auto" '+(s.auto_trigger?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<div class="setting-row"><span class="label">活跃后端</span><select id="ig-backend"><option value="novelai"'+(s.active_backend==='novelai'?' selected':'')+'>NovelAI</option><option value="sd"'+(s.active_backend==='sd'?' selected':'')+'>SD WebUI</option><option value="comfyui"'+(s.active_backend==='comfyui'?' selected':'')+'>ComfyUI</option><option value="banana"'+(s.active_backend==='banana'?' selected':'')+'>Banana</option></select></div>'
+        + '<div class="setting-row"><span class="label">质量正面</span><input type="text" id="ig-qp" value="'+esc(s.prompts.quality_positive)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">质量负面</span><input type="text" id="ig-qn" value="'+esc(s.prompts.quality_negative)+'" style="width:100%;"></div>';
+    } else if (tab === 'novelai') {
+      var n = s.backends.novelai;
+      h = '<div class="setting-row"><span class="label">API Key</span><input type="password" id="ig-nai-key" value="'+esc(n.api_key)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">模型</span><select id="ig-nai-model"><option value="nai-diffusion-4-5-curated"'+(n.model==='nai-diffusion-4-5-curated'?' selected':'')+'>V4.5 Curated</option><option value="nai-diffusion-4-5-full"'+(n.model==='nai-diffusion-4-5-full'?' selected':'')+'>V4.5 Full</option><option value="nai-diffusion-4-curated-preview"'+(n.model==='nai-diffusion-4-curated-preview'?' selected':'')+'>V4 Curated</option><option value="nai-diffusion-4-full"'+(n.model==='nai-diffusion-4-full'?' selected':'')+'>V4 Full</option><option value="nai-diffusion-3"'+(n.model==='nai-diffusion-3'?' selected':'')+'>V3</option><option value="nai-diffusion-furry-3"'+(n.model==='nai-diffusion-furry-3'?' selected':'')+'>V3 Furry</option></select></div>'
+        + '<div class="setting-row"><span class="label">采样器</span><select id="ig-nai-sampler"><option'+(n.sampler==='k_euler_ancestral'?' selected':'')+'>k_euler_ancestral</option><option'+(n.sampler==='k_euler'?' selected':'')+'>k_euler</option><option'+(n.sampler==='k_dpmpp_2s_ancestral'?' selected':'')+'>k_dpmpp_2s_ancestral</option><option'+(n.sampler==='k_dpmpp_sde'?' selected':'')+'>k_dpmpp_sde</option><option'+(n.sampler==='ddim_v3'?' selected':'')+'>ddim_v3</option></select></div>'
+        + '<div class="setting-row"><span class="label">宽度</span><input type="number" id="ig-nai-w" value="'+n.width+'" min="64" max="2048" step="64"></div>'
+        + '<div class="setting-row"><span class="label">高度</span><input type="number" id="ig-nai-h" value="'+n.height+'" min="64" max="2048" step="64"></div>'
+        + '<div class="setting-row"><span class="label">步数</span><input type="number" id="ig-nai-steps" value="'+n.steps+'" min="1" max="50"></div>'
+        + '<div class="setting-row"><span class="label">Scale</span><input type="number" id="ig-nai-scale" value="'+n.scale+'" min="1" max="30" step="0.5"></div>'
+        + '<div class="setting-row"><span class="label">SMEA</span><label class="toggle-switch"><input type="checkbox" id="ig-nai-smea" '+(n.smea?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<button class="btn-sm" onclick="testImggenBackend(\'novelai\')">测试连接</button>';
+    } else if (tab === 'sd') {
+      var sd = s.backends.sd;
+      h = '<div class="setting-row"><span class="label">URL</span><input type="text" id="ig-sd-url" value="'+esc(sd.url)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">认证</span><input type="text" id="ig-sd-auth" value="'+esc(sd.auth)+'" placeholder="user:pass" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">采样器</span><input type="text" id="ig-sd-sampler" value="'+esc(sd.sampler)+'"></div>'
+        + '<div class="setting-row"><span class="label">宽度</span><input type="number" id="ig-sd-w" value="'+sd.width+'" min="64" max="2048" step="64"></div>'
+        + '<div class="setting-row"><span class="label">高度</span><input type="number" id="ig-sd-h" value="'+sd.height+'" min="64" max="2048" step="64"></div>'
+        + '<div class="setting-row"><span class="label">步数</span><input type="number" id="ig-sd-steps" value="'+sd.steps+'" min="1" max="150"></div>'
+        + '<div class="setting-row"><span class="label">CFG</span><input type="number" id="ig-sd-cfg" value="'+sd.cfg_scale+'" min="1" max="30" step="0.5"></div>'
+        + '<div class="setting-row"><span class="label">高清修复</span><label class="toggle-switch"><input type="checkbox" id="ig-sd-hires" '+(sd.hires_fix?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<button class="btn-sm" onclick="testImggenBackend(\'sd\')">测试连接</button>';
+    } else if (tab === 'comfyui') {
+      var cf = s.backends.comfyui;
+      h = '<div class="setting-row"><span class="label">URL</span><input type="text" id="ig-cf-url" value="'+esc(cf.url)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">宽度</span><input type="number" id="ig-cf-w" value="'+cf.width+'" min="64" max="2048" step="64"></div>'
+        + '<div class="setting-row"><span class="label">高度</span><input type="number" id="ig-cf-h" value="'+cf.height+'" min="64" max="2048" step="64"></div>'
+        + '<div class="setting-row"><span class="label">步数</span><input type="number" id="ig-cf-steps" value="'+cf.steps+'" min="1" max="150"></div>'
+        + '<div class="setting-row"><span class="label">CFG</span><input type="number" id="ig-cf-cfg" value="'+cf.cfg+'" min="1" max="30" step="0.5"></div>'
+        + '<div class="setting-row"><span class="label">Workflow JSON</span><textarea id="ig-cf-workflow" rows="6" style="width:100%;font-size:0.75em;">'+(cf.workflow_json?JSON.stringify(cf.workflow_json,null,2):'')+'</textarea></div>'
+        + '<button class="btn-sm" onclick="testImggenBackend(\'comfyui\')">测试连接</button>';
+    } else if (tab === 'banana') {
+      var bn = s.backends.banana;
+      h = '<div class="setting-row"><span class="label">API URL</span><input type="text" id="ig-bn-url" value="'+esc(bn.api_url)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">API Key</span><input type="password" id="ig-bn-key" value="'+esc(bn.api_key)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">模型</span><input type="text" id="ig-bn-model" value="'+esc(bn.model)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">比例</span><select id="ig-bn-ratio"><option'+(bn.aspect_ratio==='1:1'?' selected':'')+'>1:1</option><option'+(bn.aspect_ratio==='9:16'?' selected':'')+'>9:16</option><option'+(bn.aspect_ratio==='16:9'?' selected':'')+'>16:9</option><option'+(bn.aspect_ratio==='4:3'?' selected':'')+'>4:3</option><option'+(bn.aspect_ratio==='3:4'?' selected':'')+'>3:4</option></select></div>'
+        + '<div class="setting-row"><span class="label">Grok格式</span><label class="toggle-switch"><input type="checkbox" id="ig-bn-grok" '+(bn.use_grok_format?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<button class="btn-sm" onclick="testImggenBackend(\'banana\')">测试连接</button>';
+    } else if (tab === 'llm') {
+      var lm = s.llm_optimize;
+      h = '<div class="setting-row"><span class="label">启用LLM优化</span><label class="toggle-switch"><input type="checkbox" id="ig-llm-on" '+(lm.enabled?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<div class="setting-row"><span class="label">API URL</span><input type="text" id="ig-llm-url" value="'+esc(lm.api_url)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">API Key</span><input type="password" id="ig-llm-key" value="'+esc(lm.api_key)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">模型</span><input type="text" id="ig-llm-model" value="'+esc(lm.model)+'" style="width:100%;"></div>'
+        + '<div class="setting-row"><span class="label">温度</span><input type="number" id="ig-llm-temp" value="'+lm.temperature+'" min="0" max="2" step="0.1"></div>';
+    } else if (tab === 'chars') {
+      h = '<p style="color:var(--muted);font-size:0.8em;">角色预设管理（每角色可配固定正面/负面提示词）</p>';
+      var chars = s.characters || [];
+      chars.forEach(function(c, i) {
+        h += '<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px 0;">'
+          + '<b>'+esc(c.name||'角色'+(i+1))+'</b> <button class="btn-sm" style="float:right;font-size:0.65em;" onclick="deleteImggenChar('+i+')">删除</button>'
+          + '<div style="font-size:0.75em;color:var(--muted);margin-top:4px;">正面: '+esc((c.positive||'').substring(0,60))+'</div></div>';
+      });
+      h += '<button class="btn-sm" onclick="addImggenChar()">+ 添加角色</button>';
+    } else if (tab === 'worldbook') {
+      h = '<div id="ig-wb-content"><p style="color:var(--muted);">加载中...</p></div>';
+      loadImggenWorldbooks();
+    } else if (tab === 'fab') {
+      var fb = s.fab || {};
+      h = '<div class="setting-row"><span class="label">启用悬浮球</span><label class="toggle-switch"><input type="checkbox" id="ig-fab-on" '+(fb.enabled!==false?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<div class="setting-row"><span class="label">背景颜色</span><input type="color" id="ig-fab-bg" value="'+(fb.bg_color||'#5b8a5b')+'"></div>'
+        + '<div class="setting-row"><span class="label">图标颜色</span><input type="color" id="ig-fab-icon" value="'+(fb.icon_color||'#ffffff')+'"></div>'
+        + '<div class="setting-row"><span class="label">透明度</span><input type="range" id="ig-fab-opacity" min="0.1" max="1" step="0.1" value="'+(fb.opacity!=null?fb.opacity:1)+'"> <span id="ig-fab-opacity-val">'+(fb.opacity!=null?fb.opacity:1)+'</span></div>'
+        + '<div class="setting-row"><span class="label">大小 (px)</span><input type="number" id="ig-fab-size" value="'+(fb.size||50)+'" min="30" max="120" step="5"></div>'
+        + '<div class="setting-row"><span class="label">视频模式</span><label class="toggle-switch"><input type="checkbox" id="ig-fab-video" '+(fb.video_mode?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<div class="setting-row"><span class="label">桌面宠物</span><label class="toggle-switch"><input type="checkbox" id="ig-fab-pet" '+(fb.desktop_pet?'checked':'')+'><span class="toggle-slider"></span></label></div>'
+        + '<button class="btn-sm" onclick="resetFabPosition()">重置位置</button>';
+      setTimeout(function() {
+        var slider = document.getElementById('ig-fab-opacity');
+        if (slider) slider.oninput = function() { document.getElementById('ig-fab-opacity-val').textContent = this.value; };
+      }, 50);
+    } else if (tab === 'gallery') {
+      h = '<div id="ig-gallery-content">加载中...</div>';
+      loadImggenGallery();
+    }
+    el.innerHTML = h;
+  }
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  window.saveImggenSettings = function() {
+    var updates = {};
+    var el = function(id) { var e = document.getElementById(id); return e ? e.value : null; };
+    var chk = function(id) { var e = document.getElementById(id); return e ? e.checked : false; };
+
+    if (document.getElementById('ig-enabled')) {
+      updates.enabled = chk('ig-enabled');
+      updates.auto_trigger = chk('ig-auto');
+      updates.active_backend = el('ig-backend');
+      updates.prompts = { quality_positive: el('ig-qp'), quality_negative: el('ig-qn') };
+    }
+    if (document.getElementById('ig-nai-key')) {
+      updates.backends = updates.backends || {};
+      updates.backends.novelai = { api_key: el('ig-nai-key'), model: el('ig-nai-model'), sampler: el('ig-nai-sampler'), width: +el('ig-nai-w'), height: +el('ig-nai-h'), steps: +el('ig-nai-steps'), scale: +el('ig-nai-scale'), smea: chk('ig-nai-smea') };
+    }
+    if (document.getElementById('ig-sd-url')) {
+      updates.backends = updates.backends || {};
+      updates.backends.sd = { url: el('ig-sd-url'), auth: el('ig-sd-auth'), sampler: el('ig-sd-sampler'), width: +el('ig-sd-w'), height: +el('ig-sd-h'), steps: +el('ig-sd-steps'), cfg_scale: +el('ig-sd-cfg'), hires_fix: chk('ig-sd-hires') };
+    }
+    if (document.getElementById('ig-cf-url')) {
+      updates.backends = updates.backends || {};
+      var wfText = (document.getElementById('ig-cf-workflow')||{}).value||'';
+      var wf = null; try { wf = JSON.parse(wfText); } catch(e){}
+      updates.backends.comfyui = { url: el('ig-cf-url'), width: +el('ig-cf-w'), height: +el('ig-cf-h'), steps: +el('ig-cf-steps'), cfg: +el('ig-cf-cfg'), workflow_json: wf };
+    }
+    if (document.getElementById('ig-bn-url')) {
+      updates.backends = updates.backends || {};
+      updates.backends.banana = { api_url: el('ig-bn-url'), api_key: el('ig-bn-key'), model: el('ig-bn-model'), aspect_ratio: el('ig-bn-ratio'), use_grok_format: chk('ig-bn-grok') };
+    }
+    if (document.getElementById('ig-llm-on')) {
+      updates.llm_optimize = { enabled: chk('ig-llm-on'), api_url: el('ig-llm-url'), api_key: el('ig-llm-key'), model: el('ig-llm-model'), temperature: +el('ig-llm-temp') };
+    }
+    if (document.getElementById('ig-fab-on')) {
+      updates.fab = { enabled: chk('ig-fab-on'), bg_color: el('ig-fab-bg'), icon_color: el('ig-fab-icon'), opacity: +el('ig-fab-opacity'), size: +el('ig-fab-size'), video_mode: chk('ig-fab-video'), desktop_pet: chk('ig-fab-pet') };
+    }
+
+    fetch('/api/imagegen/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates) })
+      .then(function(r){return r.json()}).then(function(d) {
+        if (d.ok) { _imggenSettings = d.settings; toastr.success('生图设置已保存'); initFab(); }
+        else toastr.error('保存失败: '+(d.error||''));
+      });
+  };
+
+  window.testImggenBackend = function(backend) {
+    toastr.info('测试连接中...');
+    fetch('/api/imagegen/test-connection', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({backend:backend}) })
+      .then(function(r){return r.json()}).then(function(d) {
+        if (d.ok) toastr.success(backend+' 连接成功' + (d.models ? ' ('+d.models.length+' models)' : ''));
+        else toastr.error(backend+' 连接失败: '+(d.error||''));
+      });
+  };
+
+  window.addImggenChar = function() {
+    var name = prompt('角色名称:');
+    if (!name) return;
+    var positive = prompt('固定正面提示词:') || '';
+    fetch('/api/imagegen/presets', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'add',character:{name:name,positive:positive,negative:'',outfits:[]}}) })
+      .then(function(r){return r.json()}).then(function(d) {
+        if (d.ok) { loadImggenSettings(); toastr.success('已添加'); }
+      });
+  };
+
+  window.deleteImggenChar = function(idx) {
+    if (!confirm('确认删除?')) return;
+    fetch('/api/imagegen/presets', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'delete',index:idx}) })
+      .then(function(r){return r.json()}).then(function(d) {
+        if (d.ok) { loadImggenSettings(); toastr.success('已删除'); }
+      });
+  };
+
+  function loadImggenGallery() {
+    fetch('/api/imagegen/gallery?per_page=12').then(function(r){return r.json()}).then(function(d) {
+      var el = document.getElementById('ig-gallery-content');
+      if (!el) return;
+      if (!d.ok || !d.images || d.images.length === 0) { el.innerHTML = '<p style="color:var(--muted);">暂无生成图片</p>'; return; }
+      el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;">'
+        + d.images.map(function(img) {
+          return '<div style="cursor:pointer;" onclick="showImggenLightbox(\''+esc(img.path)+'\')">'
+            + '<img src="/api/image?path='+encodeURIComponent(img.path)+'" style="width:100%;border-radius:4px;border:1px solid var(--border);" onerror="this.style.display=\'none\'">'
+            + '<div style="font-size:0.6em;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(img.prompt.substring(0,30))+'</div></div>';
+        }).join('') + '</div><p style="font-size:0.7em;color:var(--muted);">共 '+d.total+' 张</p>';
+    });
+  }
+
+  function loadImggenWorldbooks() {
+    fetch('/api/imagegen/worldbooks').then(function(r){return r.json()}).then(function(d) {
+      var el = document.getElementById('ig-wb-content');
+      if (!el) return;
+      if (!d.ok) { el.innerHTML = '<p style="color:#e74c3c;">加载失败</p>'; return; }
+      var books = d.books || [];
+      var bindings = d.bindings || {};
+      var currentCard = (_imggenSettings && _imggenSettings._current_card) || '_default';
+      var cardBindings = bindings[currentCard] || bindings['_default'] || [];
+      var h = '<p style="font-size:0.8em;color:var(--muted);margin-bottom:8px;">管理生图世界书文件及角色卡绑定关系</p>';
+      h += '<div style="margin-bottom:12px;"><b style="font-size:0.85em;">当前绑定 ('+esc(currentCard)+')</b>';
+      h += '<div style="font-size:0.75em;color:var(--muted);">'+esc(cardBindings.join(', ') || '无')+'</div></div>';
+      h += '<div style="margin-bottom:12px;"><b style="font-size:0.85em;">可用世界书</b></div>';
+      if (books.length === 0) {
+        h += '<p style="color:var(--muted);font-size:0.8em;">无世界书文件。请上传 JSON 文件到 imagegen_worldbooks/ 目录。</p>';
+      } else {
+        books.forEach(function(b) {
+          var bound = cardBindings.indexOf(b.filename) >= 0;
+          h += '<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px 0;">'
+            + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'
+            + '<input type="checkbox" class="wb-bind-check" data-file="'+esc(b.filename)+'" '+(bound?'checked':'')+'>'
+            + '<span><b>'+esc(b.filename)+'</b>'
+            + '<div style="font-size:0.7em;color:var(--muted);">'+b.entries_total+' 条目 ('+b.constant+' 常驻, '+b.selective+' 触发)</div>'
+            + '</span></label></div>';
+        });
+      }
+      h += '<div style="margin-top:12px;display:flex;gap:8px;">'
+        + '<button class="btn-sm" onclick="saveWbBindings()">保存绑定</button>'
+        + '<button class="btn-sm" onclick="uploadWbFile()">上传世界书</button></div>';
+      el.innerHTML = h;
+    });
+  }
+
+  window.saveWbBindings = function() {
+    var checks = document.querySelectorAll('.wb-bind-check');
+    var files = [];
+    checks.forEach(function(c) { if (c.checked) files.push(c.getAttribute('data-file')); });
+    var cardName = (_imggenSettings && _imggenSettings._current_card) || '_default';
+    fetch('/api/imagegen/worldbooks/bindings', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({card_name: cardName, books: files}) })
+      .then(function(r){return r.json()}).then(function(d) {
+        if (d.ok) { toastr.success('世界书绑定已保存'); loadImggenWorldbooks(); }
+        else toastr.error('保存失败: '+(d.error||''));
+      });
+  };
+
+  window.uploadWbFile = function() {
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = function() {
+      var file = input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var content = JSON.parse(e.target.result);
+          fetch('/api/imagegen/worldbooks/upload', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({filename: file.name, content: content}) })
+            .then(function(r){return r.json()}).then(function(d) {
+              if (d.ok) { toastr.success('已上传: '+d.filename); loadImggenWorldbooks(); }
+              else toastr.error('上传失败: '+(d.error||''));
+            });
+        } catch(err) { toastr.error('JSON 解析失败'); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  window.showImggenLightbox = function(path) {
+    var lb = document.getElementById('imggen-lightbox');
+    var img = document.getElementById('imggen-lightbox-img');
+    img.src = '/api/image?path=' + encodeURIComponent(path);
+    lb.style.display = 'flex';
+  };
+
+  // Poll for image generation tasks and update sidebar + inline images
+  function pollImggenTasks() {
+    fetch('/api/image-gen/tasks?limit=5').then(function(r){return r.json()}).then(function(d) {
+      if (!d.ok) return;
+      var tasks = d.tasks || [];
+      var latestEl = document.getElementById('sb-imggen-latest');
+      var statusEl = document.getElementById('sb-imggen-status');
+      var generating = tasks.filter(function(t){return t.status==='generating'||t.status==='pending'});
+      var done = tasks.filter(function(t){return t.status==='done'&&t.image_path});
+
+      if (generating.length > 0) {
+        statusEl.style.display = '';
+        statusEl.textContent = '⏳ 生成中... ('+generating.length+'个任务)';
+        startFabLoading();
+      } else {
+        statusEl.style.display = 'none';
+        stopFabLoading();
+      }
+
+      if (done.length > 0) {
+        var latest = done[0];
+        latestEl.innerHTML = '<img src="/api/image?path='+encodeURIComponent(latest.image_path)+'" style="width:100%;max-height:200px;object-fit:contain;border-radius:4px;cursor:pointer;border:1px solid var(--border);" onclick="showImggenLightbox(\''+esc(latest.image_path)+'\')">'
+          + '<div style="font-size:0.65em;color:var(--muted);margin-top:2px;">'+esc(latest.prompt.substring(0,40))+'</div>';
+      }
+
+      // Replace inline placeholders
+      document.querySelectorAll('.img-gen-placeholder').forEach(function(ph) {
+        var taskId = ph.getAttribute('data-task');
+        var task = tasks.find(function(t){return t.task_id===taskId});
+        if (task && task.status === 'done' && task.image_path) {
+          var img = document.createElement('img');
+          img.src = '/api/image?path=' + encodeURIComponent(task.image_path);
+          img.className = 'gen-thumb';
+          img.style.cssText = 'max-width:300px;max-height:200px;border-radius:6px;cursor:pointer;margin:8px 0;border:1px solid var(--border);';
+          img.onclick = function() { showImggenLightbox(task.image_path); };
+          ph.replaceWith(img);
+        } else if (task && task.status === 'error') {
+          ph.textContent = '❌ ' + (task.error||'生成失败');
+          ph.style.color = '#e74c3c';
+        }
+      });
+    }).catch(function(){});
+  }
+
+  // Start polling
+  setInterval(pollImggenTasks, 3000);
+  setTimeout(pollImggenTasks, 1000);
+
+  // ─── FAB (Floating Action Button) ───
+  var _fabEl = document.getElementById('imggen-fab');
+  var _fabDragging = false, _fabMoved = false;
+  var _fabStartX = 0, _fabStartY = 0, _fabOffX = 0, _fabOffY = 0;
+  var _fabLongPressTimer = null;
+  var _fabIsLoading = false;
+
+  function initFab() {
+    if (!_imggenSettings) return;
+    var fab = _imggenSettings.fab || {};
+    if (fab.enabled === false) { _fabEl.style.display = 'none'; return; }
+    _fabEl.style.display = 'flex';
+    if (fab.position) {
+      _fabEl.style.top = fab.position.top || '65vh';
+      _fabEl.style.left = fab.position.left || '20px';
+    }
+    if (fab.bg_color) _fabEl.style.backgroundColor = fab.bg_color;
+    if (fab.icon_color) _fabEl.querySelector('.fab-icon').style.color = fab.icon_color;
+    if (fab.opacity != null) _fabEl.style.opacity = fab.opacity;
+    if (fab.size) { _fabEl.style.width = fab.size+'px'; _fabEl.style.height = fab.size+'px'; }
+  }
+
+  function saveFabPosition() {
+    var pos = { top: _fabEl.style.top, left: _fabEl.style.left };
+    fetch('/api/imagegen/settings', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({fab:{position:pos}}) }).catch(function(){});
+  }
+
+  // Drag handlers
+  function fabPointerDown(e) {
+    if (e.button && e.button !== 0) return;
+    _fabDragging = true; _fabMoved = false;
+    _fabEl.classList.add('fab-dragging');
+    var touch = e.touches ? e.touches[0] : e;
+    _fabStartX = touch.clientX; _fabStartY = touch.clientY;
+    var rect = _fabEl.getBoundingClientRect();
+    _fabOffX = touch.clientX - rect.left; _fabOffY = touch.clientY - rect.top;
+    _fabLongPressTimer = setTimeout(function() {
+      if (!_fabMoved) { openFabPrompt(); _fabDragging = false; }
+    }, 500);
+    e.preventDefault();
+  }
+  function fabPointerMove(e) {
+    if (!_fabDragging) return;
+    var touch = e.touches ? e.touches[0] : e;
+    var dx = touch.clientX - _fabStartX, dy = touch.clientY - _fabStartY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      _fabMoved = true;
+      if (_fabLongPressTimer) { clearTimeout(_fabLongPressTimer); _fabLongPressTimer = null; }
+    }
+    var x = touch.clientX - _fabOffX, y = touch.clientY - _fabOffY;
+    var maxX = window.innerWidth - _fabEl.offsetWidth;
+    var maxY = window.innerHeight - _fabEl.offsetHeight;
+    x = Math.max(0, Math.min(x, maxX));
+    y = Math.max(0, Math.min(y, maxY));
+    _fabEl.style.left = x + 'px'; _fabEl.style.top = y + 'px';
+    e.preventDefault();
+  }
+  function fabPointerUp(e) {
+    if (!_fabDragging) return;
+    _fabDragging = false;
+    _fabEl.classList.remove('fab-dragging');
+    if (_fabLongPressTimer) { clearTimeout(_fabLongPressTimer); _fabLongPressTimer = null; }
+    if (_fabMoved) { saveFabPosition(); }
+    else if (!_fabMoved) { openImggenSettings(); }
+  }
+
+  _fabEl.addEventListener('mousedown', fabPointerDown);
+  document.addEventListener('mousemove', fabPointerMove);
+  document.addEventListener('mouseup', fabPointerUp);
+  _fabEl.addEventListener('touchstart', fabPointerDown, {passive:false});
+  document.addEventListener('touchmove', fabPointerMove, {passive:false});
+  document.addEventListener('touchend', fabPointerUp);
+
+  // Long-press quick prompt
+  function openFabPrompt() {
+    var popup = document.getElementById('imggen-fab-prompt-popup');
+    popup.style.display = 'block';
+    var rect = _fabEl.getBoundingClientRect();
+    popup.style.left = rect.left + 'px';
+    popup.style.bottom = (window.innerHeight - rect.top + 10) + 'px';
+    popup.style.top = 'auto';
+    document.getElementById('fab-prompt-input').focus();
+  }
+  window.closeFabPrompt = function() {
+    document.getElementById('imggen-fab-prompt-popup').style.display = 'none';
+  };
+  window.resetFabPosition = function() {
+    _fabEl.style.top = '65vh'; _fabEl.style.left = '20px';
+    saveFabPosition();
+    toastr.success('悬浮球位置已重置');
+  };
+  window.fabQuickGenerate = function() {
+    var input = document.getElementById('fab-prompt-input');
+    var tags = input.value.trim();
+    if (!tags) return;
+    fetch('/api/image-gen', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tags:tags}) })
+      .then(function(r){return r.json()}).then(function(d) {
+        if (d.ok) toastr.success('已提交生图: ' + tags.substring(0,30));
+        else toastr.error('生图失败: '+(d.error||''));
+      });
+    input.value = '';
+    closeFabPrompt();
+  };
+
+  // Loading state
+  window.startFabLoading = function() { _fabIsLoading = true; _fabEl.classList.add('fab-loading'); };
+  window.stopFabLoading = function() { _fabIsLoading = false; _fabEl.classList.remove('fab-loading'); };
+
+  // Init FAB after settings load
+  var _origLoadImggenSettings = loadImggenSettings;
+  loadImggenSettings = function() {
+    fetch('/api/imagegen/settings').then(function(r){return r.json()}).then(function(d) {
+      if (d.ok) { _imggenSettings = d.settings; renderImggenTab('main'); initFab(); }
+    });
+  };
+  // Load settings on page load to init FAB
+  fetch('/api/imagegen/settings').then(function(r){return r.json()}).then(function(d) {
+    if (d.ok) { _imggenSettings = d.settings; initFab(); }
+  }).catch(function(){});
 })();
 </script>
 </body>

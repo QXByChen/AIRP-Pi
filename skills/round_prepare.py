@@ -246,6 +246,27 @@ def main():
     chat_log_path = Path(card_folder) / "chat_log.json"
     chat_log = read_json(chat_log_path) or []
 
+    # Imagegen worldbook loading
+    imgwb_constants = []
+    imgwb_matches = []
+    try:
+        from imagegen.worldbook import ImagegenWorldbook
+        imggen_settings = read_json(styles_dir / "imagegen_settings.json") or {}
+        imgwb = ImagegenWorldbook(
+            books_dir=styles_dir / "imagegen_worldbooks",
+            settings=imggen_settings,
+        )
+        card_name = settings.get("charName", "") or Path(card_folder).name
+        imgwb_constants = imgwb.get_constant_entries(card_name)
+        match_text = user_text
+        if chat_log:
+            for entry in chat_log[-3:]:
+                match_text += " " + entry.get("ai", "")[:500]
+                match_text += " " + entry.get("user", "")[:200]
+        imgwb_matches = imgwb.match_selective_entries(card_name, match_text)
+    except Exception:
+        pass
+
     # ═══════════════════════════════════════════════
     # BUILD OUTPUT — static prefix first (cached),
     # dynamic suffix last (uncached per round).
@@ -283,6 +304,15 @@ def main():
         static_parts.append("\n=== INITVAR_PATHS (baseline structure) ===")
         static_parts.append(list_initvar_paths(initvar))
 
+    # Imagegen worldbook constant entries (rules, templates, methodology)
+    if imgwb_constants:
+        static_parts.append(f"\n=== IMAGEGEN_WORLDBOOK ({len(imgwb_constants)} rules) ===")
+        for entry in imgwb_constants:
+            comment = entry.get("comment", "untitled")
+            content = entry.get("content", "")
+            static_parts.append(f"\n  --- {comment} ---")
+            static_parts.append(f"  {content}")
+
     # ── DYNAMIC SUFFIX (changes every round) ──
 
     dynamic_parts.append("=== USER_INPUT ===")
@@ -312,6 +342,19 @@ def main():
     # NEW: User input keyword scan (bridges ST-like input-driven worldbook triggering)
     dynamic_parts.append("\n=== INPUT_MATCHES ===")
     dynamic_parts.extend(_input_matches(wb_index, user_text, card_folder))
+
+    # Imagegen worldbook selective matches (characters, scenes, actions)
+    dynamic_parts.append("\n=== IMAGEGEN_MATCHES ===")
+    if imgwb_matches:
+        for m in imgwb_matches[:6]:
+            entry = m["entry"]
+            comment = entry.get("comment", "?")
+            content = entry.get("content", "")
+            keys = ", ".join(m["matched_keys"])
+            dynamic_parts.append(f"\n  --- {comment} (matched: {keys}) ---")
+            dynamic_parts.append(f"  {content}")
+    else:
+        dynamic_parts.append("  (no imagegen matches)")
 
     # Injections
     dynamic_parts.append("\n=== INJECTIONS ===")

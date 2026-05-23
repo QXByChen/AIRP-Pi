@@ -42,6 +42,7 @@
 - `python "{ROOT}/skills/write_memory.py" "<卡片文件夹>"` — 追加本轮摘要到 project.md
 - `python "{ROOT}/skills/round_prepare.py" "<卡片文件夹>" "{ROOT}"` — 回合预处理管线
 - `python "{ROOT}/skills/round_deliver.py" "<卡片文件夹>" "{ROOT}"` — 回合后处理管线
+- `python "{ROOT}/skills/check_bagu.py" "{ROOT}"` — 反八股主动检查（生成后、交付前）
 - `python "{ROOT}/skills/import_prepare.py" "<卡片文件夹>" "{ROOT}"` — 导入/启动预处理管线
 - `python "{ROOT}/skills/start_server.py" "{ROOT}"` — 启动桥接服务器
 - `python -c "..."` — 临时诊断（编码修复、JSON 检查、进程管理等非生产流程）
@@ -85,9 +86,8 @@ python "{ROOT}/skills/start_server.py" "{ROOT}"
 读取 `import_context.txt` 获取汇总信息，替代过去逐个读取 8+ 个文件的零散操作：
 ```
 Read: {ROOT}/skills/styles/import_context.txt
-Read: {ROOT}/skills/styles/constraints.md
 ```
-`constraints.md` 为反八股约束规则集，启动时读取一次即常驻上下文，每轮 Step 5 对照检查。
+> `constraints.md` 不再需要启动时读取——反八股检查已由 `check_bagu.py` 工具程序化执行，agent 只需在步骤 4.5 调用即可。
 ```
 
 `import_context.txt` 文件结构：
@@ -197,13 +197,31 @@ python "{ROOT}/skills/round_prepare.py" "<卡片文件夹>" "{ROOT}"
 
 **步骤 4** — 按「输出格式」写入 `{ROOT}/skills/styles/response.txt`
 
+### 反八股主动检查（步骤 4.5，必做）
+
+**步骤 4.5** — 写完 response.txt 后，立即调用反八股检查工具：
+```
+python "{ROOT}/skills/check_bagu.py" "{ROOT}"
+```
+
+处理返回结果：
+- 若 `clean: true` → 直接进入步骤 5
+- 若有 `violations`：
+  - `replacement` 有值的 → 在 response.txt 中直接替换该词
+  - `replacement` 为 `""` 的 → 删除该词
+  - `replacement` 为 `null` 的 → 根据 `hint` 重写该句
+  - `structural_issues` → 调整段落开头/结构
+- 修复完成后进入步骤 5（无需再次调用 check_bagu.py）
+
+> 此工具覆盖 200+ 条规则，比你记忆中的规则更全面。不需要在生成时逐条对照 constraints.md——写完后调用工具即可。
+
 ### 后处理（AI 只需调用一次）
 
 **步骤 5** — 执行回合后处理管线：
 ```
 python "{ROOT}/skills/round_deliver.py" "<卡片文件夹>" "{ROOT}"
 ```
-此脚本自动完成：字数门禁检查 → token 采集 → 若字数不达标返回 `action: retry`（回到步骤 3 重试，最多 3 次）→ 若达标则 handler.py 交付前端 → write_memory.py 更新记忆 → 检查故事规划触发。
+此脚本自动完成：字数门禁检查 → 禁用词安全网检查 → token 采集 → 若不达标返回 `action: retry`（回到步骤 3 重试，最多 3 次）→ 若达标则 handler.py 交付前端 → write_memory.py 更新记忆 → 检查故事规划触发。
 
 若 `round_deliver.py` 返回 `story_plan_due: true` → 执行下方「剧情规划」流程。
 
@@ -385,7 +403,7 @@ total: NNNN
 
 **Step 4 人事物怎么动**：每个在场 NPC 对这轮有什么反应（从角色卡性格和前文经历出发，不套模板）？谁该入场/退场？背景 NPC 有什么进展需要交代？本轮场景是否触及世界书索引中的话题——若在步骤 2.5 中检索了条目，其正文如何严格指导本轮描写？
 
-**Step 5 输出前检查**：对照硬性门禁和 `{ROOT}/skills/styles/constraints.md` 完整约束规则集，这轮最容易踩哪几个雷？逐项检查：破折号？先否后肯？动物比喻？虚假精确？八股微表情？段落开头重复？有没有不自觉套标签或 OOC 的风险？
+**Step 5 输出前检查**：快速心理检查最常见雷区（破折号、先否后肯、动物比喻、段落开头重复）。不需要逐条对照 constraints.md——生成后 check_bagu.py 会做全面程序化检查。重点关注结构性问题（段落开头变化、感官通道轮换、情节逻辑连续性）。
 
 ## 核心规则
 
@@ -426,11 +444,16 @@ total: NNNN
 
 ## 图像标签提取（每轮自动）
 
-写完叙事正文后，回扫自己刚写的文字，从描写中提取 NAI 标签：
-- 谁/外貌 → 衣着 → 动作/体位 → 表情 → 环境/光线 → 尺度 → 画质
-- 翻译为英文逗号分隔 → 输出 `[img: tag1, tag2, ...]`
-- 简单场景 5-8 tag，复杂 NSFW 10-15 tag，无画面则跳过
-- 标签必须从原文描写中来，禁止凭空编造
+写完叙事正文后，参照 `round_context.txt` 中 `IMAGEGEN_WORLDBOOK` 和 `IMAGEGEN_MATCHES` 的规则生成 `[img: ...]` 标签：
+
+1. **严格遵循描写规则书**的格式规范和六条核心规则（人物描写顺序、场景层次递进、标签精确匹配模板风格等）
+2. **从 IMAGEGEN_MATCHES 中匹配到的角色/场景/动作条目选取标签**——角色容貌衣着从 `<character_base>` 选取，场景从 `<scene_tags>` 选取
+3. **套用基底模板**的风格/品质/画师标签（女性角色图必须附加）
+4. **NSFW 场景按六层描写法**生成（体位→器官→体液→表情→动作→衣物，每层必选）
+5. 无画面感的对话轮次跳过
+6. 标签必须从当前上下文描写中来，禁止凭空编造
+
+格式：`[img: tag1, tag2, ...]`，所有 tag 英文逗号分隔，核心标签 8-15 个。
 
 ## 多卡管理
 

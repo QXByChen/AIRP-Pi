@@ -924,6 +924,18 @@ def append_turn(card_folder, polished_input=None, content="", summary="", option
     write_chat_log(card_folder, log)
     write_content_js(card_folder)
 
+    # ── Image auto-trigger: extract [img:] tags and submit generation tasks ──
+    try:
+        img_tags = re.findall(r'\[img:\s*(.+?)\]', content)
+        if img_tags:
+            from imagegen import get_pipeline
+            pipeline = get_pipeline()
+            if pipeline.is_enabled() and pipeline.is_auto_trigger():
+                for tag_text in img_tags:
+                    pipeline.submit(raw_tags=tag_text, turn_index=next_index)
+    except Exception as e:
+        print(f"[handler] image auto-trigger error: {e}")
+
     # ── Variable audit: write diff to .var_diff.json for next-turn awareness ──
     try:
         audit = audit_variables(prev_vars or {}, new_vars or {}, content)

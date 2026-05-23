@@ -343,6 +343,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 card_store.set_current_card_name(card_id)
                 card_dir = card_store.get_card_dir(card_id)
                 CARD_PATH_FILE.write_text(str(card_dir.resolve()), encoding="utf-8")
+                # Regenerate openings.json for the new card
+                card_data = card_store._read_json(card_dir / ".card_data.json", {})
+                if card_data:
+                    from import_card import extract_openings
+                    openings = extract_openings(card_data)
+                    handler.save_openings(openings)
                 payload = card_store.get_card_payload(card_id)
                 # Rebuild content.js from target card's chat_log
                 chat_log = card_store._read_json(card_dir / "chat_log.json", [])
@@ -395,6 +401,69 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if new_active:
                     CARD_PATH_FILE.write_text(str(card_store.get_card_dir(new_active).resolve()), encoding="utf-8")
                 self._json({"ok": True, "current": new_active, "cards": card_store.list_cards()})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/card/duplicate":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                card_id = str(data.get("card") or "").strip()
+                if not card_id:
+                    self._json({"ok": False, "error": "missing card"}, 400)
+                    return
+                new_id = card_store.duplicate_card(card_id)
+                self._json({"ok": True, "new_card": new_id, "cards": card_store.list_cards()})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/card/fav":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                card_id = str(data.get("card") or "").strip()
+                if not card_id:
+                    card_id = card_store.get_current_card_name()
+                new_fav = card_store.toggle_fav(card_id)
+                self._json({"ok": True, "card": card_id, "fav": new_fav})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/card/export":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                card_id = str(data.get("card") or "").strip()
+                if not card_id:
+                    card_id = card_store.get_current_card_name()
+                export_data = card_store.export_card_json(card_id)
+                # Return as downloadable JSON
+                body_bytes = json.dumps(export_data, ensure_ascii=False, indent=2).encode("utf-8")
+                filename = f"{card_id}.json"
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Length", str(len(body_bytes)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body_bytes)
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/trash/restore":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                trash_id = str(data.get("id") or "").strip()
+                if not trash_id:
+                    self._json({"ok": False, "error": "missing id"}, 400)
+                    return
+                restored_name = card_store.restore_card(trash_id)
+                self._json({"ok": True, "restored": restored_name, "cards": card_store.list_cards()})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, 500)
 
@@ -467,22 +536,154 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             body = _safe_decode(self.rfile.read(length))
             try:
                 data = json.loads(body)
+                tags = str(data.get("tags", data.get("prompt", ""))).strip()
+                if not tags:
+                    self._json({"ok": False, "error": "missing tags/prompt"}, 400)
+                    return
+                from imagegen import get_pipeline
+                pipeline = get_pipeline()
+                task_id = pipeline.submit(
+                    raw_tags=tags,
+                    turn_index=data.get("turn_index", -1),
+                    char_name=data.get("char_name", ""),
+                    context=data.get("context", ""),
+                    backend_name=data.get("backend"),
+                    extra_params=data.get("params"),
+                )
+                self._json({"ok": True, "task_id": task_id})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/image-gen/auto":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
                 tags = str(data.get("tags", "")).strip()
                 if not tags:
                     self._json({"ok": False, "error": "missing tags"}, 400)
                     return
-                import threading
-                script = SKILLS / "scripts" / "novelai-generate.py"
-                if not script.exists():
-                    script = SKILLS.parent / "scripts" / "novelai-generate.py"
-                if not script.exists():
-                    self._json({"ok": False, "error": "novelai-generate.py not found"}, 500)
+                from imagegen import get_pipeline
+                pipeline = get_pipeline()
+                if not pipeline.is_enabled() or not pipeline.is_auto_trigger():
+                    self._json({"ok": False, "error": "auto-trigger disabled"})
                     return
-                def run_gen():
-                    subprocess.run([sys.executable, str(script), "--prompt", tags],
-                                   capture_output=True, timeout=120)
-                threading.Thread(target=run_gen, daemon=True).start()
-                self._json({"ok": True, "status": "queued", "tags": tags})
+                task_id = pipeline.submit(
+                    raw_tags=tags,
+                    turn_index=data.get("turn_index", -1),
+                    char_name=data.get("char_name", ""),
+                    context=data.get("context", ""),
+                )
+                self._json({"ok": True, "task_id": task_id})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/imagegen/settings":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                from imagegen import get_pipeline
+                pipeline = get_pipeline()
+                pipeline.save_settings(data)
+                self._json({"ok": True, "settings": pipeline.get_settings()})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/imagegen/test-connection":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                backend_name = data.get("backend", "")
+                if not backend_name:
+                    self._json({"ok": False, "error": "missing backend"}, 400)
+                    return
+                from imagegen import get_pipeline
+                pipeline = get_pipeline()
+                if data.get("config"):
+                    pipeline.save_settings({"backends": {backend_name: data["config"]}})
+                result = pipeline.test_backend_connection(backend_name)
+                self._json(result)
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/imagegen/presets":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                from imagegen import get_pipeline
+                pipeline = get_pipeline()
+                from imagegen.presets import PresetsManager
+                pm = PresetsManager(pipeline.settings)
+                action = data.get("action", "add")
+                if action == "add":
+                    idx = pm.add_character(data.get("character", {}))
+                    pipeline.save_settings({"characters": pm.to_dict()})
+                    self._json({"ok": True, "index": idx})
+                elif action == "update":
+                    pm.update_character(data.get("index", 0), data.get("character", {}))
+                    pipeline.save_settings({"characters": pm.to_dict()})
+                    self._json({"ok": True})
+                elif action == "delete":
+                    pm.remove_character(data.get("index", 0))
+                    pipeline.save_settings({"characters": pm.to_dict()})
+                    self._json({"ok": True})
+                else:
+                    self._json({"ok": False, "error": "unknown action"}, 400)
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/imagegen/gallery" and self.command == "POST":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                entry_id = data.get("id", "")
+                from imagegen import get_pipeline
+                pipeline = get_pipeline()
+                if pipeline.gallery.delete(entry_id):
+                    self._json({"ok": True})
+                else:
+                    self._json({"ok": False, "error": "not found"}, 404)
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/imagegen/worldbooks/bindings":
+            length = int(self.headers.get("Content-Length", 0))
+            body = _safe_decode(self.rfile.read(length))
+            try:
+                data = json.loads(body)
+                card_name = data.get("card_name", "_default")
+                book_files = data.get("books", [])
+                from imagegen import get_pipeline
+                pipeline = get_pipeline()
+                wb_cfg = pipeline.settings.setdefault("imagegen_worldbook", {})
+                bindings = wb_cfg.setdefault("bindings", {})
+                bindings[card_name] = book_files
+                pipeline.save_settings({"imagegen_worldbook": wb_cfg})
+                self._json({"ok": True, "bindings": bindings})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+
+        elif parsed.path == "/api/imagegen/worldbooks/upload":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(_safe_decode(body))
+                filename = data.get("filename", "").strip()
+                content = data.get("content", {})
+                if not filename or not content:
+                    self._json({"ok": False, "error": "missing filename or content"}, 400)
+                    return
+                if not filename.endswith(".json"):
+                    filename += ".json"
+                wb_dir = SKILLS / "styles" / "imagegen_worldbooks"
+                os.makedirs(wb_dir, exist_ok=True)
+                dest = wb_dir / filename
+                dest.write_text(json.dumps(content, ensure_ascii=False, indent=2), encoding="utf-8")
+                self._json({"ok": True, "filename": filename})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, 500)
 
@@ -603,10 +804,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(settings)
             return
 
-        # API: list all cards + current active card
+        # API: list all cards + current active card (supports ?sort=&search=&tag=)
         if parsed.path == "/api/cards":
             try:
-                self._json({"ok": True, "current": card_store.get_current_card_name(), "cards": card_store.list_cards()})
+                qs = urllib.parse.parse_qs(parsed.query)
+                sort_by = qs.get("sort", ["name"])[0]
+                search = qs.get("search", [""])[0]
+                tag_filter = qs.get("tag", [""])[0]
+                self._json({
+                    "ok": True,
+                    "current": card_store.get_current_card_name(),
+                    "cards": card_store.list_cards(sort_by=sort_by, search=search, tag_filter=tag_filter),
+                    "tags": card_store.get_all_tags(),
+                })
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 500)
+            return
+
+        # API: list trash items
+        if parsed.path == "/api/trash":
+            try:
+                self._json({"ok": True, "items": card_store.list_trash()})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, 500)
             return
@@ -615,7 +833,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == "/api/card":
             try:
                 payload = card_store.get_card_payload()
-                self._json({"ok": True, "card": {"id": payload["id"], "fields": payload["fields"]}})
+                self._json({"ok": True, "card": {"id": payload["id"], "fields": payload["fields"], "avatar": payload.get("avatar", ""), "fav": payload.get("fav", False)}})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, 500)
             return
@@ -637,6 +855,62 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": True, "worldbook": {"id": payload["id"], "cardId": payload["cardId"], "entries": payload["entries"]}})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, 500)
+            return
+
+        # API: image generation — status, tasks, settings, presets, gallery (GET)
+        if parsed.path == "/api/image-gen/status":
+            qs = urllib.parse.parse_qs(parsed.query)
+            task_id = qs.get("task_id", [""])[0]
+            if not task_id:
+                self._json({"ok": False, "error": "missing task_id"}, 400)
+                return
+            from imagegen import get_pipeline
+            task = get_pipeline().task_store.get_task(task_id)
+            if task:
+                self._json({"ok": True, **task})
+            else:
+                self._json({"ok": False, "error": "task not found"}, 404)
+            return
+
+        if parsed.path == "/api/image-gen/tasks":
+            qs = urllib.parse.parse_qs(parsed.query)
+            limit = int(qs.get("limit", ["50"])[0])
+            from imagegen import get_pipeline
+            tasks = get_pipeline().task_store.list_tasks(limit)
+            self._json({"ok": True, "tasks": tasks})
+            return
+
+        if parsed.path == "/api/imagegen/settings":
+            from imagegen import get_pipeline
+            self._json({"ok": True, "settings": get_pipeline().get_settings()})
+            return
+
+        if parsed.path == "/api/imagegen/presets":
+            from imagegen import get_pipeline
+            from imagegen.presets import PresetsManager
+            pipeline = get_pipeline()
+            pm = PresetsManager(pipeline.settings)
+            self._json({"ok": True, "presets": pm.list_characters()})
+            return
+
+        if parsed.path == "/api/imagegen/gallery":
+            qs = urllib.parse.parse_qs(parsed.query)
+            page = int(qs.get("page", ["1"])[0])
+            per_page = int(qs.get("per_page", ["20"])[0])
+            from imagegen import get_pipeline
+            result = get_pipeline().gallery.list(page, per_page)
+            self._json({"ok": True, **result})
+            return
+
+        if parsed.path == "/api/imagegen/worldbooks":
+            from imagegen.worldbook import ImagegenWorldbook
+            from imagegen import get_pipeline
+            pipeline = get_pipeline()
+            wb = ImagegenWorldbook(
+                books_dir=SKILLS / "styles" / "imagegen_worldbooks",
+                settings=pipeline.settings,
+            )
+            self._json({"ok": True, "books": wb.list_books(), "bindings": wb.get_bindings()})
             return
 
         # API: get image by path

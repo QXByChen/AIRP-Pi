@@ -28,7 +28,7 @@ def _server_responding():
     try:
         result = subprocess.run(
             ["curl", "-s", "--max-time", "2", f"http://localhost:{SERVER_PORT}/api/pending"],
-            capture_output=True, text=True, timeout=3
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=3
         )
         if result.returncode == 0 and result.stdout.strip():
             json.loads(result.stdout)  # validate it's JSON
@@ -49,7 +49,7 @@ def _kill_stale():
     try:
         result = subprocess.run(
             ["powershell", "-NoProfile", "-Command", cmd_py],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
         )
         if result.stdout.strip():
             for pid_str in result.stdout.strip().split():
@@ -72,7 +72,7 @@ def _kill_stale():
     try:
         subprocess.run(
             ["powershell", "-NoProfile", "-Command", cmd_node],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
         )
     except subprocess.TimeoutExpired:
         pass

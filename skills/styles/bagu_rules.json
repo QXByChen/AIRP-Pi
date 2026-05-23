@@ -1,0 +1,219 @@
+{
+  "version": "1.0",
+  "description": "AIRP-Pi 反八股规则库 — check_bagu.py 使用此文件进行程序化检测",
+  "categories": [
+    {
+      "id": "banned_punctuation",
+      "name": "禁用标点/句式",
+      "severity": "critical",
+      "skip_in_dialogue": false,
+      "rules": [
+        {"pattern": "——", "type": "literal", "replacement": null, "hint": "删除破折号，改用逗号或句号断句"},
+        {"pattern": "不是[^。！？\\n]{2,20}而是", "type": "regex", "replacement": null, "hint": "先否后肯禁止，直接写肯定表达"},
+        {"pattern": "[^。！？\\n]{1,5}……不[，,]是", "type": "regex", "replacement": null, "hint": "自我纠正式转折禁止"},
+        {"pattern": "(?:就像|如同|仿佛)[^。]{2,15}(?:小兽|幼兽|猎物|小猫|野兽|母兽|小动物)", "type": "regex", "replacement": null, "hint": "动物比喻禁止，直接描写状态"},
+        {"pattern": "像在陈述一个事实", "type": "literal", "replacement": null, "hint": "删除此套话"},
+        {"pattern": "最后一根稻草", "type": "literal", "replacement": null, "hint": "网文套话，换成具体描写"},
+        {"pattern": "不容(?:置疑|拒绝|抗拒|质疑|错辨)", "type": "regex", "replacement": null, "hint": "网文套话，换成具体态度描写"}
+      ]
+    },
+    {
+      "id": "omniscient_modifiers",
+      "name": "全知修饰词",
+      "severity": "high",
+      "skip_in_dialogue": true,
+      "rules": [
+        {"pattern": "不自觉地", "type": "literal", "replacement": "", "hint": "删除，裸写动作"},
+        {"pattern": "下意识地", "type": "literal", "replacement": "", "hint": "删除，裸写动作"},
+        {"pattern": "不由自主地", "type": "literal", "replacement": "", "hint": "删除，裸写动作"},
+        {"pattern": "情不自禁", "type": "literal", "replacement": "", "hint": "删除，裸写动作"},
+        {"pattern": "鬼使神差", "type": "literal", "replacement": "", "hint": "删除，裸写动作"},
+        {"pattern": "极力掩饰", "type": "literal", "replacement": null, "hint": "换成具体掩饰动作"},
+        {"pattern": "不易察觉", "type": "literal", "replacement": "", "hint": "删除，让读者自己判断"},
+        {"pattern": "微不可察", "type": "literal", "replacement": "", "hint": "删除"},
+        {"pattern": "不经意间", "type": "literal", "replacement": "", "hint": "删除，裸写动作"},
+        {"pattern": "若有若无", "type": "literal", "replacement": null, "hint": "换成具体描写"}
+      ]
+    },
+    {
+      "id": "banned_micro_expressions",
+      "name": "八股微表情",
+      "severity": "high",
+      "skip_in_dialogue": false,
+      "rules": [
+        {"pattern": "瞳孔微[缩张]", "type": "regex", "replacement": null, "hint": "换成角色自己的习惯小动作"},
+        {"pattern": "喉结滚动", "type": "literal", "replacement": null, "hint": "换成具体吞咽/紧张动作"},
+        {"pattern": "睫毛颤动", "type": "literal", "replacement": null, "hint": "删除或换成眨眼/闭眼"},
+        {"pattern": "呼吸一滞", "type": "literal", "replacement": null, "hint": "换成具体呼吸变化"},
+        {"pattern": "身体一僵", "type": "literal", "replacement": null, "hint": "换成具体僵住的部位和原因"},
+        {"pattern": "指节泛白", "type": "literal", "replacement": null, "hint": "换成'手指攥紧'或删除"},
+        {"pattern": "耳尖滴血", "type": "literal", "replacement": null, "hint": "换成'耳朵红了'"},
+        {"pattern": "红得滴血", "type": "literal", "replacement": null, "hint": "换成具体红的程度"}
+      ]
+    },
+    {
+      "id": "banned_body_parts",
+      "name": "禁用身体部位",
+      "severity": "high",
+      "skip_in_dialogue": false,
+      "rules": [
+        {"pattern": "指节|指关节|骨节|手关节|手指关节", "type": "regex", "replacement": "手指", "hint": "替换为'手指'"},
+        {"pattern": "脊椎|脊柱|脊背|背脊", "type": "regex", "replacement": "背部", "hint": "替换为'背部'"},
+        {"pattern": "尾椎|尾骨", "type": "regex", "replacement": "腰", "hint": "替换为'腰'或'背部'"},
+        {"pattern": "神经末梢", "type": "literal", "replacement": null, "hint": "删除，换成具体感觉"},
+        {"pattern": "四肢百骸", "type": "literal", "replacement": "全身", "hint": "替换为'全身'"},
+        {"pattern": "锁骨", "type": "literal", "replacement": "颈窝", "hint": "替换为'颈窝'或'皮肤'"}
+      ]
+    },
+    {
+      "id": "false_precision",
+      "name": "虚假精确",
+      "severity": "high",
+      "skip_in_dialogue": true,
+      "rules": [
+        {"pattern": "几不可[见闻察查]", "type": "regex", "replacement": "", "hint": "删除，要么写清楚要么不写"},
+        {"pattern": "难以察觉", "type": "literal", "replacement": "", "hint": "删除"},
+        {"pattern": "难以言喻", "type": "literal", "replacement": null, "hint": "换成具体描写"},
+        {"pattern": "细若蚊[呐蚋]", "type": "regex", "replacement": "小声", "hint": "替换为'小声'"},
+        {"pattern": "近乎", "type": "literal", "replacement": null, "hint": "删除或换成具体程度"}
+      ]
+    },
+    {
+      "id": "animal_metaphors",
+      "name": "动物化比喻",
+      "severity": "high",
+      "skip_in_dialogue": false,
+      "rules": [
+        {"pattern": "小兽", "type": "literal", "replacement": null, "hint": "禁止动物比喻，直接描写状态"},
+        {"pattern": "幼兽", "type": "literal", "replacement": null, "hint": "禁止动物比喻"},
+        {"pattern": "母兽", "type": "literal", "replacement": null, "hint": "禁止动物比喻"},
+        {"pattern": "猎物", "type": "literal", "replacement": null, "hint": "禁止动物比喻，换成具体关系描写"},
+        {"pattern": "野兽般", "type": "literal", "replacement": null, "hint": "禁止动物比喻"},
+        {"pattern": "小猫", "type": "literal", "replacement": null, "hint": "禁止动物比喻"}
+      ]
+    },
+    {
+      "id": "water_imagery",
+      "name": "水面意象滥用",
+      "severity": "high",
+      "skip_in_dialogue": false,
+      "rules": [
+        {"pattern": "涟漪", "type": "literal", "replacement": null, "hint": "换成具体情绪变化描写"},
+        {"pattern": "心湖", "type": "literal", "replacement": null, "hint": "换成具体心理描写"},
+        {"pattern": "深潭", "type": "literal", "replacement": null, "hint": "换成具体眼神/情绪描写"},
+        {"pattern": "水光潋滟", "type": "literal", "replacement": null, "hint": "换成具体描写"},
+        {"pattern": "古井", "type": "literal", "replacement": null, "hint": "换成具体描写"}
+      ]
+    },
+    {
+      "id": "sound_cliches",
+      "name": "声音套话",
+      "severity": "medium",
+      "skip_in_dialogue": true,
+      "rules": [
+        {"pattern": "喟叹", "type": "literal", "replacement": "叹气", "hint": "替换为'叹气'或'叹了口气'"},
+        {"pattern": "嘶哑", "type": "literal", "replacement": null, "hint": "换成具体声音质感描写"},
+        {"pattern": "低吼", "type": "literal", "replacement": null, "hint": "换成具体说话方式"},
+        {"pattern": "蚊呐", "type": "literal", "replacement": "小声说", "hint": "替换为'小声说'"},
+        {"pattern": "磁性", "type": "literal", "replacement": null, "hint": "删除或换成具体声音特征"}
+      ]
+    },
+    {
+      "id": "emotion_labels",
+      "name": "情感标签滥用",
+      "severity": "high",
+      "skip_in_dialogue": true,
+      "rules": [
+        {"pattern": "餍足", "type": "literal", "replacement": null, "hint": "换成具体满足的表现"},
+        {"pattern": "旖旎", "type": "literal", "replacement": null, "hint": "换成具体氛围描写"},
+        {"pattern": "氤氲", "type": "literal", "replacement": null, "hint": "换成具体气氛描写"},
+        {"pattern": "暧昧", "type": "literal", "replacement": null, "hint": "换成具体互动描写"},
+        {"pattern": "禁忌", "type": "literal", "replacement": null, "hint": "换成具体感受"},
+        {"pattern": "献祭", "type": "literal", "replacement": null, "hint": "换成具体动作"},
+        {"pattern": "审判", "type": "literal", "replacement": null, "hint": "换成具体描写"},
+        {"pattern": "深渊", "type": "literal", "replacement": null, "hint": "换成具体描写"},
+        {"pattern": "玩味", "type": "literal", "replacement": null, "hint": "换成具体表情/动作"},
+        {"pattern": "审视", "type": "literal", "replacement": "看", "hint": "替换为'看'或具体目光描写"},
+        {"pattern": "戏谑", "type": "literal", "replacement": null, "hint": "换成具体语气/表情"}
+      ]
+    },
+    {
+      "id": "extreme_emotions",
+      "name": "极端标签化情感词",
+      "severity": "high",
+      "skip_in_dialogue": true,
+      "rules": [
+        {"pattern": "崩溃", "type": "literal", "replacement": "撑不住", "hint": "替换为'撑不住'"},
+        {"pattern": "绝望", "type": "literal", "replacement": null, "hint": "换成具体绝望的表现"},
+        {"pattern": "沦陷", "type": "literal", "replacement": "陷进去", "hint": "替换为'陷进去'"},
+        {"pattern": "虔诚", "type": "literal", "replacement": null, "hint": "换成具体态度描写"},
+        {"pattern": "崇拜", "type": "literal", "replacement": "佩服", "hint": "替换为'佩服'"},
+        {"pattern": "臣服", "type": "literal", "replacement": "听他的", "hint": "替换为'听他的'"},
+        {"pattern": "支配", "type": "literal", "replacement": null, "hint": "换成具体行为"},
+        {"pattern": "征服", "type": "literal", "replacement": null, "hint": "换成具体行为"},
+        {"pattern": "占有", "type": "literal", "replacement": null, "hint": "换成具体行为"},
+        {"pattern": "驯化", "type": "literal", "replacement": null, "hint": "换成具体关系描写"}
+      ]
+    },
+    {
+      "id": "clinical_language",
+      "name": "临床/学术语言",
+      "severity": "high",
+      "skip_in_dialogue": true,
+      "rules": [
+        {"pattern": "博弈", "type": "literal", "replacement": "讨价还价", "hint": "替换为'讨价还价'"},
+        {"pattern": "操控", "type": "literal", "replacement": null, "hint": "换成具体行为"},
+        {"pattern": "主导", "type": "literal", "replacement": null, "hint": "换成具体行为"},
+        {"pattern": "试探", "type": "literal", "replacement": "套话", "hint": "替换为'套话'或具体行为"},
+        {"pattern": "攻防", "type": "literal", "replacement": "斗嘴", "hint": "替换为'斗嘴'"},
+        {"pattern": "拿捏", "type": "literal", "replacement": null, "hint": "换成具体行为"},
+        {"pattern": "接管", "type": "literal", "replacement": null, "hint": "换成具体行为"},
+        {"pattern": "打压", "type": "literal", "replacement": null, "hint": "换成具体行为"}
+      ]
+    },
+    {
+      "id": "action_cliches",
+      "name": "动作套话",
+      "severity": "medium",
+      "skip_in_dialogue": false,
+      "rules": [
+        {"pattern": "战栗|颤栗", "type": "regex", "replacement": null, "hint": "换成具体颤抖部位和原因"},
+        {"pattern": "痉挛", "type": "literal", "replacement": null, "hint": "换成具体肌肉反应"},
+        {"pattern": "研磨", "type": "literal", "replacement": null, "hint": "换成具体动作"},
+        {"pattern": "裹挟着", "type": "literal", "replacement": null, "hint": "换成具体描写"},
+        {"pattern": "铺天盖地", "type": "literal", "replacement": null, "hint": "换成具体范围描写"},
+        {"pattern": "狂风暴雨般", "type": "literal", "replacement": null, "hint": "换成具体力度描写"},
+        {"pattern": "画圈|划圈", "type": "regex", "replacement": null, "hint": "禁止手指画圈动作"},
+        {"pattern": "搔刮", "type": "literal", "replacement": null, "hint": "换成具体触碰方式"},
+        {"pattern": "弧度", "type": "literal", "replacement": "线条", "hint": "替换为'线条'"},
+        {"pattern": "弓起", "type": "literal", "replacement": "弯起", "hint": "替换为'弯起'"}
+      ]
+    },
+    {
+      "id": "imagery_cliches",
+      "name": "虚假意象",
+      "severity": "medium",
+      "skip_in_dialogue": false,
+      "rules": [
+        {"pattern": "午后的光", "type": "literal", "replacement": null, "hint": "换成具体光线描写"},
+        {"pattern": "雨后青草", "type": "literal", "replacement": null, "hint": "换成具体气味"},
+        {"pattern": "袅袅热气", "type": "literal", "replacement": null, "hint": "换成具体描写"},
+        {"pattern": "淬毒的刀子", "type": "literal", "replacement": null, "hint": "换成具体比喻"},
+        {"pattern": "细密的汗珠", "type": "literal", "replacement": null, "hint": "换成具体出汗描写"},
+        {"pattern": "提线木偶", "type": "literal", "replacement": null, "hint": "换成具体无力感描写"},
+        {"pattern": "揉入骨血", "type": "literal", "replacement": null, "hint": "删除"},
+        {"pattern": "炸开白光", "type": "literal", "replacement": null, "hint": "换成具体感觉"}
+      ]
+    },
+    {
+      "id": "filler_modifiers",
+      "name": "滥用修饰",
+      "severity": "medium",
+      "skip_in_dialogue": true,
+      "rules": [
+        {"pattern": "极其", "type": "literal", "replacement": null, "hint": "删除或换成具体程度"},
+        {"pattern": "狡黠", "type": "literal", "replacement": null, "hint": "换成具体表情描写"}
+      ]
+    }
+  ]
+}

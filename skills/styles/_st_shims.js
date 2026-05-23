@@ -261,6 +261,19 @@
     return window._deepReplaceUser(vars, name);
   };
 
+  /* ─── getChatMessages / getCurrentMessageId ───
+     JS-Slash-Runner APIs used by card templates to retrieve stat_data.
+     In AIRP-Pi, variables live in window.MVU_VARIABLES. We return them
+     wrapped in the structure templates expect: [{data: {stat_data: ...}}]. */
+  window.getCurrentMessageId = function () {
+    return 0;
+  };
+
+  window.getChatMessages = function (_messageId) {
+    var vars = window.MVU_VARIABLES || {};
+    return Promise.resolve([{ data: { stat_data: vars } }]);
+  };
+
   /* ─── SillyTavern context stub ───
      Card scripts in the regex pipeline (e.g. init_terminal radar
      chart) may probe window.SillyTavern.getContext() to check
