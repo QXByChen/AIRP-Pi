@@ -1504,7 +1504,7 @@ function pickAction(action) {
   ta.focus();
 }
 
-const BRIDGE = 'http://localhost:8765';
+const BRIDGE = '';
 let bridgeOk = false;
 
 // ═══ 酒馆桥接：卡脚本 → 我们前端 ═══
@@ -2930,7 +2930,7 @@ window.addEventListener('unhandledrejection', function(e) {
 });
 
 function generateBugReport() {
-  var BRIDGE = 'http://localhost:' + (window._BRIDGE_PORT || 8765);
+  var BRIDGE = window.location.origin;
   fetch(BRIDGE + '/api/bug_report')
     .then(function(r) { return r.json(); })
     .then(function(data) {
