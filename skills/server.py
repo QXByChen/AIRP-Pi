@@ -492,24 +492,41 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": False, "error": "需要 multipart/form-data"}, 400)
                 return
             try:
-                import cgi
-                form = cgi.FieldStorage(
-                    fp=self.rfile,
-                    headers=self.headers,
-                    environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": content_type}
-                )
-                file_item = form["file"]
-                if not file_item.filename:
+                from email.parser import BytesParser
+                from email.policy import EmailPolicy
+                
+                # Parse multipart/form-data using email.parser (cgi module removed in Python 3.13)
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                
+                # Construct full message headers
+                headers_bytes = b"Content-Type: " + content_type.encode() + b"\r\n\r\n" + body
+                parser = BytesParser(policy=EmailPolicy())
+                msg = parser.parsebytes(headers_bytes)
+                
+                # Extract file from multipart
+                file_item = None
+                filename = None
+                for part in msg.iter_parts():
+                    if part.get_content_disposition() == "form-data":
+                        name = part.get_param("name", header="content-disposition")
+                        if name == "file":
+                            file_item = part
+                            filename = part.get_param("filename", header="content-disposition")
+                            break
+                
+                if not file_item or not filename:
                     self._json({"ok": False, "error": "no file"}, 400)
                     return
-                filename = Path(file_item.filename).name
+                
+                filename = Path(filename).name
                 card_name = Path(filename).stem
                 cards_dir = PROJECT_ROOT / "角色卡"
                 cards_dir.mkdir(parents=True, exist_ok=True)
                 card_dir = cards_dir / card_name
                 card_dir.mkdir(parents=True, exist_ok=True)
                 dest = card_dir / filename
-                dest.write_bytes(file_item.file.read())
+                dest.write_bytes(file_item.get_payload(decode=True))
                 # 运行 import_card 解析
                 import_result = {}
                 try:
@@ -975,15 +992,28 @@ if __name__ == "__main__":
 
     # --- Clean up stale mvu_server processes ---
     try:
-        raw = subprocess.check_output(
-            'powershell -Command "Get-Process node | Where-Object { $_.CommandLine -like \'*mvu_server*\' } | Select-Object -ExpandProperty Id"',
-            shell=True, timeout=10
-        )
-        out = _safe_decode(raw).strip()
-        if out:
-            for pid_str in out.split():
-                os.kill(int(pid_str), signal.SIGTERM)
-            log.info(f"清理残留 mvu_server 进程: {out}")
+        if sys.platform == "win32":
+            raw = subprocess.check_output(
+                'powershell -Command "Get-Process node | Where-Object { $_.CommandLine -like \'*mvu_server*\' } | Select-Object -ExpandProperty Id"',
+                shell=True, timeout=10
+            )
+            out = _safe_decode(raw).strip()
+            if out:
+                for pid_str in out.split():
+                    os.kill(int(pid_str), signal.SIGTERM)
+                log.info(f"清理残留 mvu_server 进程: {out}")
+        else:
+            result = subprocess.run(
+                ["pgrep", "-f", "mvu_server"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.stdout.strip():
+                for pid_str in result.stdout.strip().split():
+                    try:
+                        os.kill(int(pid_str), signal.SIGTERM)
+                        log.info(f"清理残留 mvu_server 进程: {pid_str}")
+                    except ProcessLookupError:
+                        pass
     except Exception:
         pass
 

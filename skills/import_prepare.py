@@ -18,6 +18,7 @@ import_prepare.py — 导入/启动预处理管线。
 
 import json
 import os
+import sys
 import subprocess
 import sys
 from pathlib import Path
@@ -41,8 +42,7 @@ def read_json(path):
 def cleanup_residual(styles_dir: Path) -> dict:
     """Kill stale Python processes running skills/ scripts.
 
-    Uses PowerShell to identify and kill processes whose command-line
-    contains '*skills*', excluding the current process (self).
+    Cross-platform: uses ps + kill on macOS/Linux, PowerShell + taskkill on Windows.
 
     Also removes any stale .pending file from a previous session so
     the bridge server doesn't see a phantom pending event.
@@ -50,31 +50,53 @@ def cleanup_residual(styles_dir: Path) -> dict:
     current_pid = os.getpid()
     killed = 0
 
-    cmd = (
-        f"Get-Process python -ErrorAction SilentlyContinue | "
-        f'Where-Object {{ $_.Id -ne {current_pid} -and '
-        f'$_.CommandLine -like "*skills*" }} | '
-        f"Select-Object -ExpandProperty Id"
-    )
-    try:
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", cmd],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+    if sys.platform == "win32":
+        # Windows: use PowerShell
+        cmd = (
+            f"Get-Process python -ErrorAction SilentlyContinue | "
+            f'Where-Object {{ $_.Id -ne {current_pid} -and '
+            f'$_.CommandLine -like "*skills*" }} | '
+            f"Select-Object -ExpandProperty Id"
         )
-        if result.stdout.strip():
-            pids = result.stdout.strip().split()
-            for pid_str in pids:
-                try:
-                    pid = int(pid_str)
-                    subprocess.run(
-                        ["taskkill", "/F", "/PID", str(pid)],
-                        capture_output=True, timeout=5
-                    )
-                    killed += 1
-                except (ValueError, subprocess.TimeoutExpired):
-                    pass
-    except subprocess.TimeoutExpired:
-        pass
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", cmd],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split()
+                for pid_str in pids:
+                    try:
+                        pid = int(pid_str)
+                        subprocess.run(
+                            ["taskkill", "/F", "/PID", str(pid)],
+                            capture_output=True, timeout=5
+                        )
+                        killed += 1
+                    except (ValueError, subprocess.TimeoutExpired):
+                        pass
+        except subprocess.TimeoutExpired:
+            pass
+    else:
+        # macOS / Linux: use ps + grep + kill
+        try:
+            result = subprocess.run(
+                ["ps", "aux"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+            )
+            for line in result.stdout.splitlines():
+                if "skills" in line and "grep" not in line and "import_prepare" not in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            pid = int(parts[1])
+                            if pid != current_pid:
+                                os.kill(pid, 9)  # SIGKILL
+                                killed += 1
+                        except (ValueError, ProcessLookupError, PermissionError):
+                            pass
+        except subprocess.TimeoutExpired:
+            pass
 
     # Drop stale .pending
     pending = styles_dir / ".pending"

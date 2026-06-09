@@ -39,43 +39,69 @@ def _server_responding():
 
 
 def _kill_stale():
-    """Kill any leftover Python server and Node mvu_server processes."""
-    # Python skills processes
-    cmd_py = (
-        "Get-Process python -ErrorAction SilentlyContinue | "
-        "Where-Object { $_.CommandLine -like '*skills*' } | "
-        "Select-Object -ExpandProperty Id"
-    )
-    try:
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", cmd_py],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
-        )
-        if result.stdout.strip():
-            for pid_str in result.stdout.strip().split():
-                try:
-                    subprocess.run(
-                        ["taskkill", "/F", "/PID", pid_str],
-                        capture_output=True, timeout=5
-                    )
-                except (ValueError, subprocess.TimeoutExpired):
-                    pass
-    except subprocess.TimeoutExpired:
-        pass
+    """Kill any leftover Python server and Node mvu_server processes.
 
-    # Node mvu_server processes
-    cmd_node = (
-        "Get-Process node -ErrorAction SilentlyContinue | "
-        "Where-Object { $_.CommandLine -like '*mvu_server*' } | "
-        "Stop-Process -Force"
-    )
-    try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", cmd_node],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+    Cross-platform: uses ps + kill on macOS/Linux, PowerShell + taskkill on Windows.
+    """
+    current_pid = os.getpid()
+
+    if sys.platform == "win32":
+        # --- Windows: PowerShell ---
+        # Python skills processes
+        cmd_py = (
+            "Get-Process python -ErrorAction SilentlyContinue | "
+            "Where-Object { $_.CommandLine -like '*skills*' } | "
+            "Select-Object -ExpandProperty Id"
         )
-    except subprocess.TimeoutExpired:
-        pass
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", cmd_py],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+            )
+            if result.stdout.strip():
+                for pid_str in result.stdout.strip().split():
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/F", "/PID", pid_str],
+                            capture_output=True, timeout=5
+                        )
+                    except (ValueError, subprocess.TimeoutExpired):
+                        pass
+        except subprocess.TimeoutExpired:
+            pass
+
+        # Node mvu_server processes
+        cmd_node = (
+            "Get-Process node -ErrorAction SilentlyContinue | "
+            "Where-Object { $_.CommandLine -like '*mvu_server*' } | "
+            "Stop-Process -Force"
+        )
+        try:
+            subprocess.run(
+                ["powershell", "-NoProfile", "-Command", cmd_node],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+            )
+        except subprocess.TimeoutExpired:
+            pass
+    else:
+        # --- macOS / Linux: ps + kill ---
+        try:
+            result = subprocess.run(
+                ["ps", "aux"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+            )
+            for line in result.stdout.splitlines():
+                if ("skills" in line or "mvu_server" in line) and "grep" not in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            pid = int(parts[1])
+                            if pid != current_pid:
+                                os.kill(pid, 9)  # SIGKILL
+                        except (ValueError, ProcessLookupError, PermissionError):
+                            pass
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def _start_server(root_dir: str):
